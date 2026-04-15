@@ -111,6 +111,13 @@ def wait_until_up(url: str, timeout: float = 180.0) -> None:
 def install_repo_dependencies(repo_dir: Path) -> None:
     env = os.environ.copy()
     env["TMPDIR"] = "/workspace/tmp"
+    env["HF_HOME"] = "/workspace/hf"
+    env["UV_CACHE_DIR"] = "/workspace/uv_cache"
+
+    Path("/workspace/tmp").mkdir(parents=True, exist_ok=True)
+    Path("/workspace/hf").mkdir(parents=True, exist_ok=True)
+    Path("/workspace/uv_cache").mkdir(parents=True, exist_ok=True)
+
     print("Installing deps in:", repo_dir)
 
     if (repo_dir / "pyproject.toml").exists():
@@ -120,17 +127,31 @@ def install_repo_dependencies(repo_dir: Path) -> None:
             cwd=repo_dir,
             capture_output=True,
             text=True,
+            env=env,
         )
     elif (repo_dir / "requirements.txt").exists():
         print("Detected requirements.txt")
 
-        subprocess.run(["python", "-m", "venv", ".venv"], cwd=repo_dir)
-
-        result = subprocess.run(
-            [str(repo_dir / ".venv" / "bin" / "pip"), "install", "-r", "requirements.txt"],
+        venv_result = subprocess.run(
+            ["uv", "venv"],
             cwd=repo_dir,
             capture_output=True,
             text=True,
+            env=env,
+        )
+
+        print("VENV STDOUT:", venv_result.stdout)
+        print("VENV STDERR:", venv_result.stderr)
+
+        if venv_result.returncode != 0:
+            raise Exception("Virtualenv creation failed")
+
+        result = subprocess.run(
+            ["uv", "pip", "install", "-r", "requirements.txt"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            env=env,
         )
     else:
         print("No dependencies file found")
