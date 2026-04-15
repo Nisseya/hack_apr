@@ -554,14 +554,21 @@ def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
     log_path = None
 
     try:
+        print("Cloning repo...")
         repo_dir = clone_repo(payload.repo_url)
+        print("Repo cloned")
+        print("Installing dependencies...")
         env_dir = install_repo_dependencies(repo_dir)
+        print("Dependencies installed")
 
         port = get_free_port()
         process, base_url, log_path = start_submission_server(repo_dir, env_dir, port)
         wait_until_up(process, f"{base_url}/", log_path)
 
+        print("Generating answers...")
         generated_answers = generate_answers_from_repo(process.pid, base_url)
+        print(f"{len(generated_answers)} answers generated")
+        print(generated_answers[0])
         executed_answers, _ = execute_answers(generated_answers)
         logs = read_text_file(log_path)
 
