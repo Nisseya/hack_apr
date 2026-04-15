@@ -125,6 +125,7 @@ def install_repo_dependencies(repo_dir: Path) -> None:
     env["TMPDIR"] = "/workspace/tmp"
     env["HF_HOME"] = "/workspace/hf"
     env["UV_CACHE_DIR"] = "/workspace/uv_cache"
+    env["UV_LINK_MODE"] = "copy"
 
     Path("/workspace/tmp").mkdir(parents=True, exist_ok=True)
     Path("/workspace/hf").mkdir(parents=True, exist_ok=True)
@@ -215,7 +216,10 @@ def start_submission_server(repo_dir: Path, port: int):
 
 
 def clone_repo(repo_url: str) -> Path:
-    repo_dir = Path(tempfile.mkdtemp(prefix="submission_"))
+    base_tmp = Path("/workspace/tmp")
+    base_tmp.mkdir(parents=True, exist_ok=True)
+
+    repo_dir = Path(tempfile.mkdtemp(prefix="submission_", dir=base_tmp))
     result = subprocess.run(
         ["git", "clone", repo_url, str(repo_dir)],
         capture_output=True,
