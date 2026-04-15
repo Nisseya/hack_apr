@@ -308,7 +308,12 @@ def start_submission_server(repo_dir: Path, env_dir: Path, port: int):
         "0.0.0.0",
         "--port",
         str(port),
+        "--timeout-keep-alive",
+        "600",
     ]
+
+    env = uv_env()
+    env["HF_HUB_DISABLE_XET"] = "1"
 
     log_file = open(log_path, "w")
 
@@ -317,6 +322,8 @@ def start_submission_server(repo_dir: Path, env_dir: Path, port: int):
         cwd=repo_dir,
         stdout=log_file,
         stderr=subprocess.STDOUT,
+        env=env,
+        start_new_session=True,
     )
 
     log_file.close()
