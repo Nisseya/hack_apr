@@ -93,19 +93,31 @@ def get_free_port() -> int:
     return port
 
 
-def wait_until_up(url: str, timeout: float = 180.0) -> None:
+def wait_until_up(process: subprocess.Popen, url: str, log_path: Path, timeout: float = 15.0) -> None:
     deadline = time.time() + timeout
 
     while time.time() < deadline:
+        if process.poll() is not None:
+            logs = read_text_file(log_path)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Submission server exited before startup.\n{logs}",
+            )
+
         try:
-            response = requests.get(url, timeout=1)
-            if response.status_code < 500:
+            response = requests.get(url, timeout=0.5)
+            if response.ok:
                 return
         except requests.RequestException:
             pass
-        time.sleep(1)
 
-    raise HTTPException(status_code=500, detail="Submission server did not start in time")
+        time.sleep(0.3)
+
+    logs = read_text_file(log_path)
+    raise HTTPException(
+        status_code=500,
+        detail=f"Submission server did not start in time.\n{logs}",
+    )
 
 
 def install_repo_dependencies(repo_dir: Path) -> None:
@@ -405,7 +417,7 @@ def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
         print("Base URL:", base_url)
 
         print("[4] Waiting for server...")
-        wait_until_up(f"{base_url}/docs")
+        wait_until_up(process, f"{base_url}/", log_path)
         print("Server is up")
 
         print("[5] Generating answers...")
