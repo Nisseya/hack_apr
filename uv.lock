@@ -2,6 +2,13 @@ version = 1
 revision = 3
 requires-python = ">=3.13"
 
+[manifest]
+members = [
+    "hack-apr",
+    "submission",
+    "submission-fake",
+]
+
 [[package]]
 name = "accelerate"
 version = "1.13.0"
@@ -1389,6 +1396,44 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/92/8e/f2b8b4fa8ba65aae251170c54f8ce198fb588fc348301c2b624f8c63efac/streamlit-1.55.0.tar.gz", hash = "sha256:015e512bbd02d000f4047e51118dc086b70e7d9c46b4a11a33c2509731379626", size = 8612008, upload-time = "2026-03-03T22:26:02.149Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/e6/412c1e1f200ca8c32ecf10201839183e261ad61ced3ede34a66f6d4be3cf/streamlit-1.55.0-py3-none-any.whl", hash = "sha256:1e4a16449c6131696180f4ddb40ea8c51834e89c2a43e1b0362bc9b1cfd9b415", size = 9075714, upload-time = "2026-03-03T22:25:59.126Z" },
+]
+
+[[package]]
+name = "submission"
+version = "0.1.0"
+source = { virtual = "submissions/submission" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "fastapi" },
+    { name = "torch" },
+    { name = "transformers" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "accelerate", specifier = ">=1.13.0" },
+    { name = "fastapi", specifier = ">=0.135.1" },
+    { name = "torch", specifier = ">=2.10.0" },
+    { name = "transformers", specifier = ">=5.3.0" },
+    { name = "uvicorn", specifier = ">=0.42.0" },
+]
+
+[[package]]
+name = "submission-fake"
+version = "0.1.0"
+source = { virtual = "submissions/submission_fake" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.135.1" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "uvicorn", specifier = ">=0.42.0" },
 ]
 
 [[package]]

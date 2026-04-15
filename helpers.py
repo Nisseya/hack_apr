@@ -70,7 +70,7 @@ def get_code(
     base_url: str,
     message: str,
     schema: dict,
-    timeout: float = 30.0,
+    timeout: float = 200.0,
     sample_interval: float = 0.2,
 ) -> CodeMetrics:
     result: dict = {}
@@ -80,7 +80,7 @@ def get_code(
         try:
             response = requests.post(
                 f"{base_url}/chat",
-                json={"message": message, "schema": schema},
+                json={"message": message, "tables": schema},
                 timeout=timeout,
             )
             result["response"] = response
