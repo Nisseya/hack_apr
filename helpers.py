@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -5,9 +6,10 @@ import subprocess
 import tempfile
 import threading
 import time
+from pathlib import Path
 
-from pydantic import BaseModel
 import requests
+from pydantic import BaseModel
 
 
 class CodeMetrics(BaseModel):
@@ -24,69 +26,18 @@ class ExecutionMetrics(BaseModel):
     duration_seconds: float
 
 
-def _parse_mem_to_mb(value: str) -> float:
-    match = re.match(r"([\d.]+)\s*([A-Za-z]+)", value.strip())
-    if not match:
-        return 0.0
-
-    number = float(match.group(1))
-    unit = match.group(2)
-
-    factors = {
-        "B": 1 / (1024 * 1024),
-        "KiB": 1 / 1024,
-        "MiB": 1,
-        "GiB": 1024,
-        "Gi": 1024,
-        "TiB": 1024 * 1024,
-    }
-    return number * factors.get(unit, 0.0)
-
-
-def _get_container_ram_mb(container_id: str) -> float:
+def _get_pid_ram_mb(pid: int) -> float:
     result = subprocess.run(
-        ["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", container_id],
+        ["ps", "-o", "rss=", "-p", str(pid)],
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
+    if result.returncode != 0 or not result.stdout.strip():
         return 0.0
-
-    output = result.stdout.strip()
-    if not output:
-        return 0.0
-
-    used = output.split("/")[0].strip()
-    return _parse_mem_to_mb(used)
+    return int(result.stdout.strip()) / 1024
 
 
-def _get_container_pids(container_id: str) -> set[int]:
-    result = subprocess.run(
-        ["docker", "top", container_id, "-eo", "pid"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        return set()
-
-    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    if len(lines) <= 1:
-        return set()
-
-    pids = set()
-    for line in lines[1:]:
-        try:
-            pids.add(int(line))
-        except ValueError:
-            pass
-    return pids
-
-
-def _get_container_gpu_mb(container_id: str) -> float:
-    pids = _get_container_pids(container_id)
-    if not pids:
-        return 0.0
-
+def _get_pid_gpu_mb(pid: int) -> float:
     result = subprocess.run(
         [
             "nvidia-smi",
@@ -105,18 +56,17 @@ def _get_container_gpu_mb(container_id: str) -> float:
         if len(parts) != 2:
             continue
         try:
-            pid = int(parts[0])
+            line_pid = int(parts[0])
             used_mb = float(parts[1])
         except ValueError:
             continue
-        if pid in pids:
+        if line_pid == pid:
             total += used_mb
-
     return total
 
 
 def get_code(
-    container_id: str,
+    pid: int,
     base_url: str,
     message: str,
     schema: dict,
@@ -145,15 +95,15 @@ def get_code(
     peak_gpu_mb = 0.0
 
     while thread.is_alive():
-        peak_ram_mb = max(peak_ram_mb, _get_container_ram_mb(container_id))
-        peak_gpu_mb = max(peak_gpu_mb, _get_container_gpu_mb(container_id))
+        peak_ram_mb = max(peak_ram_mb, _get_pid_ram_mb(pid))
+        peak_gpu_mb = max(peak_gpu_mb, _get_pid_gpu_mb(pid))
         time.sleep(sample_interval)
 
     thread.join()
 
     duration_seconds = time.perf_counter() - start
-    peak_ram_mb = max(peak_ram_mb, _get_container_ram_mb(container_id))
-    peak_gpu_mb = max(peak_gpu_mb, _get_container_gpu_mb(container_id))
+    peak_ram_mb = max(peak_ram_mb, _get_pid_ram_mb(pid))
+    peak_gpu_mb = max(peak_gpu_mb, _get_pid_gpu_mb(pid))
 
     if "exception" in error:
         raise error["exception"]
@@ -170,19 +120,23 @@ def get_code(
     )
 
 
-def _build_load_table_code(name: str, dataset: dict) -> str:
-    file_name = dataset["file_name"]
+def _load_table_code(name: str, dataset: dict, project_dir: Path) -> str:
+    file_path = Path(dataset["file_name"])
+    if not file_path.is_absolute():
+        file_path = project_dir / file_path
+
+    file_path = file_path.resolve()
     file_format = dataset.get("format", "parquet")
 
     if file_format == "csv":
-        return f'{name} = pl.read_csv("{file_name}")'
+        return f'{name} = pl.read_csv({file_path.as_posix()!r})'
 
-    return f'{name} = pl.read_parquet("{file_name}")'
+    return f'{name} = pl.read_parquet({file_path.as_posix()!r})'
 
 
-def _build_runner_code(code: str, datasets: dict[str, dict]) -> str:
+def _build_runner_code(code: str, datasets: dict[str, dict], project_dir: Path) -> str:
     load_tables = "\n".join(
-        _build_load_table_code(name, dataset)
+        _load_table_code(name, dataset, project_dir)
         for name, dataset in datasets.items()
     )
 
@@ -206,7 +160,7 @@ if result.columns:
 csv_text = result.write_csv(file=None)
 result_hash = hashlib.sha256(csv_text.encode("utf-8")).hexdigest()[:16]
 
-payload = {{
+print(json.dumps({{
     "columns": result.columns,
     "shape": {{
         "rows": result.height,
@@ -214,48 +168,33 @@ payload = {{
     }},
     "hash": result_hash,
     "rows": result.to_dicts(),
-}}
-
-print(json.dumps(payload, default=str))
+}}, default=str))
 """.strip()
 
 
-def execute_code(container_id: str, code: str, datasets: dict[str, dict]) -> ExecutionMetrics:
-    wrapped_code = _build_runner_code(code, datasets)
+def execute_code(code: str, datasets: dict[str, dict], project_dir: str | Path) -> ExecutionMetrics:
+    project_dir = Path(project_dir).resolve()
+    wrapped_code = _build_runner_code(code, datasets, project_dir)
 
     with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
         f.write(wrapped_code)
-        host_path = f.name
-
-    container_path = f"/tmp/{os.path.basename(host_path)}"
+        script_path = f.name
 
     try:
-        copy_result = subprocess.run(
-            ["docker", "cp", host_path, f"{container_id}:{container_path}"],
-            capture_output=True,
-            text=True,
-        )
-        if copy_result.returncode != 0:
-            return ExecutionMetrics(
-                stdout="",
-                stderr=copy_result.stderr,
-                success=False,
-                duration_seconds=0.0,
-            )
-
         start = time.perf_counter()
-        run_result = subprocess.run(
-            ["docker", "exec", container_id, "python", container_path],
+        result = subprocess.run(
+            ["python", script_path],
             capture_output=True,
             text=True,
+            cwd=project_dir,
         )
         duration_seconds = time.perf_counter() - start
 
         return ExecutionMetrics(
-            stdout=run_result.stdout,
-            stderr=run_result.stderr,
-            success=run_result.returncode == 0,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            success=result.returncode == 0,
             duration_seconds=duration_seconds,
         )
     finally:
-        os.remove(host_path)
+        os.remove(script_path)

@@ -1,8 +1,10 @@
 import json
-import shlex
+import shutil
 import socket
 import subprocess
+import tempfile
 import time
+from pathlib import Path
 
 import requests
 from fastapi import FastAPI, HTTPException
@@ -14,6 +16,7 @@ from questions import build_benchmark_inputs
 
 
 app = FastAPI()
+ROOT = Path(__file__).resolve().parent
 questions = build_benchmark_inputs()
 
 
@@ -46,13 +49,12 @@ class ExecutedAnswer(BaseModel):
 
 
 class RunRepoResponse(BaseModel):
-    generator_container_id: str
-    executor_container_id: str
+    generator_pid: int
+    repo_dir: str
     url: str
     generated_answers: list[GeneratedAnswer]
     executed_answers: list[ExecutedAnswer]
     generator_logs: str
-    executor_logs: str
 
 
 class RunProviderResponse(BaseModel):
@@ -64,6 +66,24 @@ class RunProviderResponse(BaseModel):
     executed_answers: list[ExecutedAnswer]
 
 
+def _with_absolute_dataset_paths(question: dict) -> dict:
+    question = dict(question)
+    datasets = {}
+
+    for name, dataset in question["datasets"].items():
+        dataset = dict(dataset)
+        file_path = Path(dataset["file_name"])
+        if not file_path.is_absolute():
+            dataset["file_name"] = str((ROOT / file_path).resolve())
+        datasets[name] = dataset
+
+    question["datasets"] = datasets
+    return question
+
+
+questions = [_with_absolute_dataset_paths(question) for question in questions]
+
+
 def get_free_port() -> int:
     sock = socket.socket()
     sock.bind(("", 0))
@@ -72,7 +92,7 @@ def get_free_port() -> int:
     return port
 
 
-def wait_until_up(url: str, timeout: float = 3600.0) -> None:
+def wait_until_up(url: str, timeout: float = 180.0) -> None:
     deadline = time.time() + timeout
 
     while time.time() < deadline:
@@ -84,77 +104,85 @@ def wait_until_up(url: str, timeout: float = 3600.0) -> None:
             pass
         time.sleep(1)
 
-    raise HTTPException(status_code=500, detail="Container server did not start in time")
+    raise HTTPException(status_code=500, detail="Submission server did not start in time")
 
 
-def run_executor_container() -> str:
-    result = subprocess.run(
-        ["docker", "run", "-d", "polars-executor:latest"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=result.stderr.strip() or result.stdout.strip(),
+def install_repo_dependencies(repo_dir: Path) -> None:
+    if (repo_dir / "pyproject.toml").exists():
+        result = subprocess.run(
+            ["uv", "sync"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
         )
-    return result.stdout.strip()
-
-
-def run_generator_container(repo_url: str, port: int) -> tuple[str, str]:
-    base_url = f"http://127.0.0.1:{port}"
-    escaped_repo_url = shlex.quote(repo_url)
-
-    result = subprocess.run(
-        [
-            "docker",
-            "run",
-            "-d",
-            "--gpus",
-            "all",
-            "-p",
-            f"{port}:8000",
-            "gpu-fastapi-base:cu121",
-            "sh",
-            "-lc",
-            (
-                f"git clone {escaped_repo_url} /app && "
-                "cd /app && "
-                "uv pip install --system -r requirements.txt && "
-                "uvicorn main:app --host 0.0.0.0 --port 8000"
-            ),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=result.stderr.strip() or result.stdout.strip(),
+    elif (repo_dir / "requirements.txt").exists():
+        venv_result = subprocess.run(
+            ["python", "-m", "venv", ".venv"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
         )
+        if venv_result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=venv_result.stderr.strip() or venv_result.stdout.strip(),
+            )
 
-    container_id = result.stdout.strip()
-    wait_until_up(f"{base_url}/docs")
-    return container_id, base_url
-
-
-def get_container_logs(container_id: str) -> str:
-    result = subprocess.run(
-        ["docker", "logs", container_id],
-        capture_output=True,
-        text=True,
-    )
-    return (result.stdout + "\n" + result.stderr).strip()
-
-
-def remove_container(container_id: str | None) -> None:
-    if not container_id:
+        result = subprocess.run(
+            [str(repo_dir / ".venv" / "bin" / "pip"), "install", "-r", "requirements.txt"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+        )
+    else:
         return
-    subprocess.run(
-        ["docker", "rm", "-f", container_id],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=result.stderr.strip() or result.stdout.strip(),
+        )
+
+
+def start_submission_server(repo_dir: Path, port: int) -> tuple[subprocess.Popen, str, Path]:
+    log_path = repo_dir / "server.log"
+
+    if (repo_dir / "pyproject.toml").exists():
+        cmd = ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(port)]
+    else:
+        python_path = repo_dir / ".venv" / "bin" / "python"
+        cmd = [str(python_path), "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(port)]
+
+    log_file = open(log_path, "w")
+    process = subprocess.Popen(
+        cmd,
+        cwd=repo_dir,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
     )
+    return process, f"http://127.0.0.1:{port}", log_path
+
+
+def clone_repo(repo_url: str) -> Path:
+    repo_dir = Path(tempfile.mkdtemp(prefix="submission_"))
+    result = subprocess.run(
+        ["git", "clone", repo_url, str(repo_dir)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        shutil.rmtree(repo_dir, ignore_errors=True)
+        raise HTTPException(
+            status_code=500,
+            detail=result.stderr.strip() or result.stdout.strip(),
+        )
+    return repo_dir
+
+
+def read_text_file(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
 
 
 def parse_execution_stdout(stdout: str) -> dict | None:
@@ -187,7 +215,7 @@ def compare_execution_results(
         return ExecutedAnswer(
             id=question_id,
             stdout=generated_execution.stdout,
-            stderr=gold_execution.stderr or generated_execution.stderr,
+            stderr=gold_execution.stderr,
             success=False,
             execution_duration_seconds=generated_execution.duration_seconds,
             exact_match=None,
@@ -208,8 +236,8 @@ def compare_execution_results(
 
     exact_match = (
         generated_payload["hash"] == gold_payload["hash"]
-        and generated_payload["columns"] == gold_payload["columns"]
         and generated_payload["shape"] == gold_payload["shape"]
+        and generated_payload["columns"] == gold_payload["columns"]
     )
 
     return ExecutedAnswer(
@@ -228,20 +256,17 @@ def compare_execution_results(
     )
 
 
-def generate_answers_from_repo(
-    generator_container_id: str,
-    base_url: str,
-) -> list[GeneratedAnswer]:
-    answers = []
+def generate_answers_from_repo(pid: int, base_url: str) -> list[GeneratedAnswer]:
+    generated_answers = []
 
     for question in questions:
         generation = get_code(
-            container_id=generator_container_id,
+            pid=pid,
             base_url=base_url,
             message=question["question"],
             schema=question["datasets"],
         )
-        answers.append(
+        generated_answers.append(
             GeneratedAnswer(
                 id=question["id"],
                 question=question["question"],
@@ -252,11 +277,11 @@ def generate_answers_from_repo(
             )
         )
 
-    return answers
+    return generated_answers
 
 
 def generate_answers_from_provider(payload: RunProviderRequest) -> tuple[list[GeneratedAnswer], float]:
-    answers = []
+    generated_answers = []
     total_generation_duration_seconds = 0.0
 
     for question in questions:
@@ -272,7 +297,7 @@ def generate_answers_from_provider(payload: RunProviderRequest) -> tuple[list[Ge
         )
         total_generation_duration_seconds += generation.duration_seconds
 
-        answers.append(
+        generated_answers.append(
             GeneratedAnswer(
                 id=question["id"],
                 question=question["question"],
@@ -283,26 +308,23 @@ def generate_answers_from_provider(payload: RunProviderRequest) -> tuple[list[Ge
             )
         )
 
-    return answers, total_generation_duration_seconds
+    return generated_answers, total_generation_duration_seconds
 
 
-def execute_answers(
-    executor_container_id: str,
-    generated_answers: list[GeneratedAnswer],
-) -> tuple[list[ExecutedAnswer], float]:
+def execute_answers(generated_answers: list[GeneratedAnswer]) -> tuple[list[ExecutedAnswer], float]:
     executed_answers = []
     total_execution_duration_seconds = 0.0
 
     for generated_answer, question in zip(generated_answers, questions, strict=True):
         generated_execution = execute_code(
-            executor_container_id,
             generated_answer.code,
             question["datasets"],
+            ROOT,
         )
         gold_execution = execute_code(
-            executor_container_id,
             question["gold_code"],
             question["datasets"],
+            ROOT,
         )
 
         total_execution_duration_seconds += generated_execution.duration_seconds
@@ -320,45 +342,47 @@ def execute_answers(
 
 @app.post("/run-repo", response_model=RunRepoResponse)
 def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
-    generator_container_id = None
-    executor_container_id = None
+    repo_dir = None
+    process = None
+    log_path = None
 
     try:
-        port = get_free_port()
-        generator_container_id, base_url = run_generator_container(payload.repo_url, port)
-        executor_container_id = run_executor_container()
+        repo_dir = clone_repo(payload.repo_url)
+        install_repo_dependencies(repo_dir)
 
-        generated_answers = generate_answers_from_repo(generator_container_id, base_url)
-        executed_answers, _ = execute_answers(executor_container_id, generated_answers)
+        port = get_free_port()
+        process, base_url, log_path = start_submission_server(repo_dir, port)
+        wait_until_up(f"{base_url}/docs")
+
+        generated_answers = generate_answers_from_repo(process.pid, base_url)
+        executed_answers, _ = execute_answers(generated_answers)
 
         return RunRepoResponse(
-            generator_container_id=generator_container_id,
-            executor_container_id=executor_container_id,
+            generator_pid=process.pid,
+            repo_dir=str(repo_dir),
             url=base_url,
             generated_answers=generated_answers,
             executed_answers=executed_answers,
-            generator_logs=get_container_logs(generator_container_id),
-            executor_logs=get_container_logs(executor_container_id),
+            generator_logs=read_text_file(log_path),
         )
     except requests.RequestException:
-        raise HTTPException(status_code=500, detail="Request to generator container failed")
+        raise HTTPException(status_code=500, detail="Request to submission server failed")
     finally:
-        remove_container(generator_container_id)
-        remove_container(executor_container_id)
+        if process is not None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        if repo_dir is not None:
+            shutil.rmtree(repo_dir, ignore_errors=True)
 
 
 @app.post("/run-provider-experiment", response_model=RunProviderResponse)
 def run_provider_experiment(payload: RunProviderRequest) -> RunProviderResponse:
-    executor_container_id = None
-
     try:
-        executor_container_id = run_executor_container()
-
         generated_answers, total_generation_duration_seconds = generate_answers_from_provider(payload)
-        executed_answers, total_execution_duration_seconds = execute_answers(
-            executor_container_id,
-            generated_answers,
-        )
+        executed_answers, total_execution_duration_seconds = execute_answers(generated_answers)
 
         return RunProviderResponse(
             provider=payload.config.provider.value,
@@ -373,5 +397,3 @@ def run_provider_experiment(payload: RunProviderRequest) -> RunProviderResponse:
         raise HTTPException(status_code=502, detail=detail)
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=str(exc))
-    finally:
-        remove_container(executor_container_id)
