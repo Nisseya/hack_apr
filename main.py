@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+import os
 
 import requests
 from fastapi import FastAPI, HTTPException
@@ -108,6 +109,8 @@ def wait_until_up(url: str, timeout: float = 180.0) -> None:
 
 
 def install_repo_dependencies(repo_dir: Path) -> None:
+    env = os.environ.copy()
+    env["TMPDIR"] = "/workspace/tmp"
     print("Installing deps in:", repo_dir)
 
     if (repo_dir / "pyproject.toml").exists():
