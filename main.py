@@ -129,7 +129,13 @@ def install_repo_dependencies(repo_dir: Path) -> None:
             text=True,
             env=env,
         )
-    elif (repo_dir / "requirements.txt").exists():
+        print("STDOUT:", result.stdout)
+        print("STDERR:", result.stderr)
+        if result.returncode != 0:
+            raise Exception("Dependency install failed")
+        return
+
+    if (repo_dir / "requirements.txt").exists():
         print("Detected requirements.txt")
 
         venv_result = subprocess.run(
@@ -139,10 +145,8 @@ def install_repo_dependencies(repo_dir: Path) -> None:
             text=True,
             env=env,
         )
-
         print("VENV STDOUT:", venv_result.stdout)
         print("VENV STDERR:", venv_result.stderr)
-
         if venv_result.returncode != 0:
             raise Exception("Virtualenv creation failed")
 
@@ -153,15 +157,25 @@ def install_repo_dependencies(repo_dir: Path) -> None:
             text=True,
             env=env,
         )
-    else:
-        print("No dependencies file found")
+        print("STDOUT:", result.stdout)
+        print("STDERR:", result.stderr)
+        if result.returncode != 0:
+            raise Exception("Dependency install failed")
+
+        server_result = subprocess.run(
+            ["uv", "pip", "install", "fastapi", "uvicorn"],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        print("SERVER STDOUT:", server_result.stdout)
+        print("SERVER STDERR:", server_result.stderr)
+        if server_result.returncode != 0:
+            raise Exception("Server dependency install failed")
         return
 
-    print("STDOUT:", result.stdout)
-    print("STDERR:", result.stderr)
-
-    if result.returncode != 0:
-        raise Exception("Dependency install failed")
+    print("No dependencies file found")
 
 def start_submission_server(repo_dir: Path, port: int):
     print("Starting server from:", repo_dir)
