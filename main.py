@@ -309,7 +309,7 @@ def start_submission_server(repo_dir: Path, env_dir: Path, port: int):
         "--port",
         str(port),
         "--timeout-keep-alive",
-        "600",
+        "1200",
     ]
 
     env = uv_env()
