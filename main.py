@@ -108,7 +108,10 @@ def wait_until_up(url: str, timeout: float = 180.0) -> None:
 
 
 def install_repo_dependencies(repo_dir: Path) -> None:
+    print("Installing deps in:", repo_dir)
+
     if (repo_dir / "pyproject.toml").exists():
+        print("Detected uv project")
         result = subprocess.run(
             ["uv", "sync"],
             cwd=repo_dir,
@@ -116,17 +119,9 @@ def install_repo_dependencies(repo_dir: Path) -> None:
             text=True,
         )
     elif (repo_dir / "requirements.txt").exists():
-        venv_result = subprocess.run(
-            ["python", "-m", "venv", ".venv"],
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-        )
-        if venv_result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=venv_result.stderr.strip() or venv_result.stdout.strip(),
-            )
+        print("Detected requirements.txt")
+
+        subprocess.run(["python", "-m", "venv", ".venv"], cwd=repo_dir)
 
         result = subprocess.run(
             [str(repo_dir / ".venv" / "bin" / "pip"), "install", "-r", "requirements.txt"],
@@ -135,16 +130,18 @@ def install_repo_dependencies(repo_dir: Path) -> None:
             text=True,
         )
     else:
+        print("No dependencies file found")
         return
 
+    print("STDOUT:", result.stdout)
+    print("STDERR:", result.stderr)
+
     if result.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=result.stderr.strip() or result.stdout.strip(),
-        )
+        raise Exception("Dependency install failed")
 
+def start_submission_server(repo_dir: Path, port: int):
+    print("Starting server from:", repo_dir)
 
-def start_submission_server(repo_dir: Path, port: int) -> tuple[subprocess.Popen, str, Path]:
     log_path = repo_dir / "server.log"
 
     if (repo_dir / "pyproject.toml").exists():
@@ -153,13 +150,17 @@ def start_submission_server(repo_dir: Path, port: int) -> tuple[subprocess.Popen
         python_path = repo_dir / ".venv" / "bin" / "python"
         cmd = [str(python_path), "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(port)]
 
+    print("CMD:", " ".join(cmd))
+
     log_file = open(log_path, "w")
+
     process = subprocess.Popen(
         cmd,
         cwd=repo_dir,
         stdout=log_file,
         stderr=subprocess.STDOUT,
     )
+
     return process, f"http://127.0.0.1:{port}", log_path
 
 
@@ -346,16 +347,40 @@ def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
     process = None
     log_path = None
 
+    print("\n===== RUN REPO START =====")
+    print("Repo URL:", payload.repo_url)
+
     try:
+        print("[1] Cloning repo...")
         repo_dir = clone_repo(payload.repo_url)
+        print("Cloned to:", repo_dir)
+
+        print("[2] Installing dependencies...")
         install_repo_dependencies(repo_dir)
+        print("Dependencies installed")
 
         port = get_free_port()
-        process, base_url, log_path = start_submission_server(repo_dir, port)
-        wait_until_up(f"{base_url}/docs")
+        print("[3] Starting server on port:", port)
 
+        process, base_url, log_path = start_submission_server(repo_dir, port)
+        print("Server started PID:", process.pid)
+        print("Base URL:", base_url)
+
+        print("[4] Waiting for server...")
+        wait_until_up(f"{base_url}/docs")
+        print("Server is up")
+
+        print("[5] Generating answers...")
         generated_answers = generate_answers_from_repo(process.pid, base_url)
+        print("Generated:", len(generated_answers))
+
+        print("[6] Executing answers...")
         executed_answers, _ = execute_answers(generated_answers)
+        print("Execution done")
+
+        logs = read_text_file(log_path)
+
+        print("===== RUN REPO SUCCESS =====\n")
 
         return RunRepoResponse(
             generator_pid=process.pid,
@@ -363,19 +388,32 @@ def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
             url=base_url,
             generated_answers=generated_answers,
             executed_answers=executed_answers,
-            generator_logs=read_text_file(log_path),
+            generator_logs=logs,
         )
-    except requests.RequestException:
-        raise HTTPException(status_code=500, detail="Request to submission server failed")
+
+    except Exception as e:
+        print("===== ERROR =====")
+        print("Error:", str(e))
+
+        if log_path:
+            print("===== SERVER LOGS =====")
+            print(read_text_file(log_path))
+
+        raise HTTPException(status_code=500, detail=str(e))
+
     finally:
+        print("[CLEANUP]")
         if process is not None:
             process.terminate()
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 process.kill()
+
         if repo_dir is not None:
             shutil.rmtree(repo_dir, ignore_errors=True)
+
+        print("===== RUN REPO END =====\n")
 
 
 @app.post("/run-provider-experiment", response_model=RunProviderResponse)
