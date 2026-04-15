@@ -550,7 +550,7 @@ def execute_answers(generated_answers: list[GeneratedAnswer]) -> tuple[list[Exec
 
 
 def sse_event(event: str, data: dict) -> str:
-    print(event)
+    print(f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n")
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
