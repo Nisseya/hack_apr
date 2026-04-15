@@ -1,0 +1,728 @@
+{
+  "metadata": {
+    "description": "SQL database schemas extracted from classic and benchmark databases, structured for Polars dataset generation",
+    "sources": ["Northwind", "Chinook", "Sakila", "TPC-H", "Spider (concert_singer, pets_1, car_1, flight_2, world_1)"],
+    "total_schemas": 5,
+    "total_tables": 57
+  },
+  "schemas": {
+    "northwind": {
+      "description": "Classic Microsoft sample DB — fictitious specialty food import/export company. 14 tables covering customers, orders, products, employees, shipping.",
+      "source": "Microsoft Northwind Traders",
+      "tables": {
+        "categories": {
+          "description": "Product categories.",
+          "columns": {
+            "category_id": {"type": "Int64", "pk": true, "description": "Unique category identifier"},
+            "category_name": {"type": "Utf8", "description": "Name of the category (e.g. Beverages, Condiments, Seafood)"},
+            "description": {"type": "Utf8", "description": "Free-text description of the category"}
+          }
+        },
+        "suppliers": {
+          "description": "Companies that supply products to Northwind.",
+          "columns": {
+            "supplier_id": {"type": "Int64", "pk": true, "description": "Unique supplier identifier"},
+            "company_name": {"type": "Utf8", "description": "Name of the supplier company"},
+            "contact_name": {"type": "Utf8", "description": "Name of the primary contact person"},
+            "contact_title": {"type": "Utf8", "description": "Title of the contact (e.g. Sales Manager)"},
+            "city": {"type": "Utf8", "description": "City where the supplier is located"},
+            "country": {"type": "Utf8", "description": "Country where the supplier is located"},
+            "phone": {"type": "Utf8", "description": "Supplier phone number"}
+          }
+        },
+        "products": {
+          "description": "Products sold by Northwind Traders.",
+          "columns": {
+            "product_id": {"type": "Int64", "pk": true, "description": "Unique product identifier"},
+            "product_name": {"type": "Utf8", "description": "Name of the product"},
+            "supplier_id": {"type": "Int64", "fk": "suppliers.supplier_id", "description": "FK to suppliers"},
+            "category_id": {"type": "Int64", "fk": "categories.category_id", "description": "FK to categories"},
+            "unit_price": {"type": "Float64", "description": "Price per unit in USD"},
+            "units_in_stock": {"type": "Int64", "description": "Number of units currently in stock"},
+            "units_on_order": {"type": "Int64", "description": "Number of units on order from supplier"},
+            "reorder_level": {"type": "Int64", "description": "Minimum stock level before reorder"},
+            "discontinued": {"type": "Boolean", "description": "Whether the product has been discontinued"}
+          }
+        },
+        "customers": {
+          "description": "Northwind Traders customers.",
+          "columns": {
+            "customer_id": {"type": "Utf8", "pk": true, "description": "5-character customer code (e.g. ALFKI)"},
+            "company_name": {"type": "Utf8", "description": "Company name"},
+            "contact_name": {"type": "Utf8", "description": "Primary contact name"},
+            "contact_title": {"type": "Utf8", "description": "Title of the contact"},
+            "city": {"type": "Utf8", "description": "City"},
+            "country": {"type": "Utf8", "description": "Country"},
+            "phone": {"type": "Utf8", "description": "Phone number"},
+            "fax": {"type": "Utf8", "nullable": true, "description": "Fax number (nullable)"}
+          }
+        },
+        "employees": {
+          "description": "Northwind employees.",
+          "columns": {
+            "employee_id": {"type": "Int64", "pk": true, "description": "Unique employee identifier"},
+            "last_name": {"type": "Utf8", "description": "Last name"},
+            "first_name": {"type": "Utf8", "description": "First name"},
+            "title": {"type": "Utf8", "description": "Job title (e.g. Sales Representative)"},
+            "birth_date": {"type": "Utf8", "description": "Date of birth (YYYY-MM-DD)"},
+            "hire_date": {"type": "Utf8", "description": "Date of hire (YYYY-MM-DD)"},
+            "city": {"type": "Utf8", "description": "City"},
+            "country": {"type": "Utf8", "description": "Country"},
+            "reports_to": {"type": "Int64", "nullable": true, "fk": "employees.employee_id", "description": "FK to manager (self-referencing, nullable)"}
+          }
+        },
+        "shippers": {
+          "description": "Shipping companies used by Northwind.",
+          "columns": {
+            "shipper_id": {"type": "Int64", "pk": true, "description": "Unique shipper identifier"},
+            "company_name": {"type": "Utf8", "description": "Shipping company name"},
+            "phone": {"type": "Utf8", "description": "Phone number"}
+          }
+        },
+        "orders": {
+          "description": "Customer orders.",
+          "columns": {
+            "order_id": {"type": "Int64", "pk": true, "description": "Unique order identifier"},
+            "customer_id": {"type": "Utf8", "fk": "customers.customer_id", "description": "FK to customers"},
+            "employee_id": {"type": "Int64", "fk": "employees.employee_id", "description": "FK to employee who handled the order"},
+            "order_date": {"type": "Utf8", "description": "Date the order was placed (YYYY-MM-DD)"},
+            "required_date": {"type": "Utf8", "description": "Date the customer requested delivery"},
+            "shipped_date": {"type": "Utf8", "nullable": true, "description": "Date the order was shipped (nullable if not yet shipped)"},
+            "shipper_id": {"type": "Int64", "fk": "shippers.shipper_id", "description": "FK to shippers"},
+            "freight": {"type": "Float64", "description": "Shipping cost in USD"}
+          }
+        },
+        "order_details": {
+          "description": "Line items for each order.",
+          "columns": {
+            "order_id": {"type": "Int64", "pk": true, "fk": "orders.order_id", "description": "FK to orders (composite PK with product_id)"},
+            "product_id": {"type": "Int64", "pk": true, "fk": "products.product_id", "description": "FK to products (composite PK with order_id)"},
+            "unit_price": {"type": "Float64", "description": "Price per unit at time of order"},
+            "quantity": {"type": "Int64", "description": "Quantity ordered"},
+            "discount": {"type": "Float64", "description": "Discount percentage (0.0 to 1.0)"}
+          }
+        },
+        "regions": {
+          "description": "Sales regions.",
+          "columns": {
+            "region_id": {"type": "Int64", "pk": true, "description": "Unique region identifier"},
+            "region_description": {"type": "Utf8", "description": "Region name (e.g. Eastern, Western, Northern, Southern)"}
+          }
+        },
+        "territories": {
+          "description": "Sales territories within regions.",
+          "columns": {
+            "territory_id": {"type": "Utf8", "pk": true, "description": "Unique territory identifier"},
+            "territory_description": {"type": "Utf8", "description": "Territory name"},
+            "region_id": {"type": "Int64", "fk": "regions.region_id", "description": "FK to regions"}
+          }
+        }
+      },
+      "foreign_keys": [
+        ["products.supplier_id", "suppliers.supplier_id"],
+        ["products.category_id", "categories.category_id"],
+        ["orders.customer_id", "customers.customer_id"],
+        ["orders.employee_id", "employees.employee_id"],
+        ["orders.shipper_id", "shippers.shipper_id"],
+        ["order_details.order_id", "orders.order_id"],
+        ["order_details.product_id", "products.product_id"],
+        ["territories.region_id", "regions.region_id"],
+        ["employees.reports_to", "employees.employee_id"]
+      ]
+    },
+
+    "chinook": {
+      "description": "Digital media store database (modeled after iTunes). 11 tables covering artists, albums, tracks, playlists, invoices, customers, employees.",
+      "source": "Chinook Database (Luis Rocha)",
+      "tables": {
+        "artists": {
+          "description": "Music artists.",
+          "columns": {
+            "artist_id": {"type": "Int64", "pk": true, "description": "Unique artist identifier"},
+            "name": {"type": "Utf8", "description": "Artist or band name"}
+          }
+        },
+        "albums": {
+          "description": "Music albums, each belonging to one artist.",
+          "columns": {
+            "album_id": {"type": "Int64", "pk": true, "description": "Unique album identifier"},
+            "title": {"type": "Utf8", "description": "Album title"},
+            "artist_id": {"type": "Int64", "fk": "artists.artist_id", "description": "FK to artists"}
+          }
+        },
+        "media_types": {
+          "description": "Media format types (e.g. MPEG, AAC, Protected AAC).",
+          "columns": {
+            "media_type_id": {"type": "Int64", "pk": true, "description": "Unique media type identifier"},
+            "name": {"type": "Utf8", "description": "Media type name"}
+          }
+        },
+        "genres": {
+          "description": "Music genres.",
+          "columns": {
+            "genre_id": {"type": "Int64", "pk": true, "description": "Unique genre identifier"},
+            "name": {"type": "Utf8", "description": "Genre name (e.g. Rock, Jazz, Classical)"}
+          }
+        },
+        "tracks": {
+          "description": "Individual music tracks.",
+          "columns": {
+            "track_id": {"type": "Int64", "pk": true, "description": "Unique track identifier"},
+            "name": {"type": "Utf8", "description": "Track title"},
+            "album_id": {"type": "Int64", "fk": "albums.album_id", "description": "FK to albums"},
+            "media_type_id": {"type": "Int64", "fk": "media_types.media_type_id", "description": "FK to media_types"},
+            "genre_id": {"type": "Int64", "fk": "genres.genre_id", "description": "FK to genres"},
+            "composer": {"type": "Utf8", "nullable": true, "description": "Composer name (nullable)"},
+            "milliseconds": {"type": "Int64", "description": "Track duration in milliseconds"},
+            "bytes": {"type": "Int64", "description": "File size in bytes"},
+            "unit_price": {"type": "Float64", "description": "Price per track in USD"}
+          }
+        },
+        "playlists": {
+          "description": "Named playlists.",
+          "columns": {
+            "playlist_id": {"type": "Int64", "pk": true, "description": "Unique playlist identifier"},
+            "name": {"type": "Utf8", "description": "Playlist name"}
+          }
+        },
+        "playlist_track": {
+          "description": "Many-to-many relationship between playlists and tracks.",
+          "columns": {
+            "playlist_id": {"type": "Int64", "pk": true, "fk": "playlists.playlist_id", "description": "FK to playlists"},
+            "track_id": {"type": "Int64", "pk": true, "fk": "tracks.track_id", "description": "FK to tracks"}
+          }
+        },
+        "chinook_customers": {
+          "description": "Store customers.",
+          "columns": {
+            "customer_id": {"type": "Int64", "pk": true, "description": "Unique customer identifier"},
+            "first_name": {"type": "Utf8", "description": "First name"},
+            "last_name": {"type": "Utf8", "description": "Last name"},
+            "company": {"type": "Utf8", "nullable": true, "description": "Company name (nullable)"},
+            "email": {"type": "Utf8", "description": "Email address"},
+            "city": {"type": "Utf8", "description": "City"},
+            "state": {"type": "Utf8", "nullable": true, "description": "State/province (nullable)"},
+            "country": {"type": "Utf8", "description": "Country"},
+            "support_rep_id": {"type": "Int64", "fk": "chinook_employees.employee_id", "description": "FK to employee assigned as support rep"}
+          }
+        },
+        "chinook_employees": {
+          "description": "Store employees.",
+          "columns": {
+            "employee_id": {"type": "Int64", "pk": true, "description": "Unique employee identifier"},
+            "last_name": {"type": "Utf8", "description": "Last name"},
+            "first_name": {"type": "Utf8", "description": "First name"},
+            "title": {"type": "Utf8", "description": "Job title"},
+            "reports_to": {"type": "Int64", "nullable": true, "fk": "chinook_employees.employee_id", "description": "FK to manager (self-ref, nullable)"},
+            "birth_date": {"type": "Utf8", "description": "Date of birth (YYYY-MM-DD)"},
+            "hire_date": {"type": "Utf8", "description": "Date of hire (YYYY-MM-DD)"},
+            "city": {"type": "Utf8", "description": "City"},
+            "country": {"type": "Utf8", "description": "Country"},
+            "email": {"type": "Utf8", "description": "Email address"}
+          }
+        },
+        "invoices": {
+          "description": "Customer purchase invoices.",
+          "columns": {
+            "invoice_id": {"type": "Int64", "pk": true, "description": "Unique invoice identifier"},
+            "customer_id": {"type": "Int64", "fk": "chinook_customers.customer_id", "description": "FK to customers"},
+            "invoice_date": {"type": "Utf8", "description": "Date of the invoice (YYYY-MM-DD)"},
+            "billing_city": {"type": "Utf8", "description": "Billing city"},
+            "billing_country": {"type": "Utf8", "description": "Billing country"},
+            "total": {"type": "Float64", "description": "Total invoice amount in USD"}
+          }
+        },
+        "invoice_lines": {
+          "description": "Line items within an invoice.",
+          "columns": {
+            "invoice_line_id": {"type": "Int64", "pk": true, "description": "Unique line item identifier"},
+            "invoice_id": {"type": "Int64", "fk": "invoices.invoice_id", "description": "FK to invoices"},
+            "track_id": {"type": "Int64", "fk": "tracks.track_id", "description": "FK to tracks"},
+            "unit_price": {"type": "Float64", "description": "Price per unit at time of purchase"},
+            "quantity": {"type": "Int64", "description": "Number of units purchased"}
+          }
+        }
+      },
+      "foreign_keys": [
+        ["albums.artist_id", "artists.artist_id"],
+        ["tracks.album_id", "albums.album_id"],
+        ["tracks.media_type_id", "media_types.media_type_id"],
+        ["tracks.genre_id", "genres.genre_id"],
+        ["playlist_track.playlist_id", "playlists.playlist_id"],
+        ["playlist_track.track_id", "tracks.track_id"],
+        ["chinook_customers.support_rep_id", "chinook_employees.employee_id"],
+        ["invoices.customer_id", "chinook_customers.customer_id"],
+        ["invoice_lines.invoice_id", "invoices.invoice_id"],
+        ["invoice_lines.track_id", "tracks.track_id"]
+      ]
+    },
+
+    "sakila": {
+      "description": "DVD rental store database. 16 tables covering films, actors, inventory, rentals, payments, customers, staff, stores.",
+      "source": "MySQL Sakila Sample Database",
+      "tables": {
+        "actors": {
+          "description": "Film actors.",
+          "columns": {
+            "actor_id": {"type": "Int64", "pk": true, "description": "Unique actor identifier"},
+            "first_name": {"type": "Utf8", "description": "First name"},
+            "last_name": {"type": "Utf8", "description": "Last name"}
+          }
+        },
+        "film_categories": {
+          "description": "Film genre categories (Action, Comedy, Drama, etc.).",
+          "columns": {
+            "category_id": {"type": "Int64", "pk": true, "description": "Unique category identifier"},
+            "name": {"type": "Utf8", "description": "Category name"}
+          }
+        },
+        "languages": {
+          "description": "Languages available for films.",
+          "columns": {
+            "language_id": {"type": "Int64", "pk": true, "description": "Unique language identifier"},
+            "name": {"type": "Utf8", "description": "Language name (e.g. English, Italian, Japanese)"}
+          }
+        },
+        "films": {
+          "description": "Films available for rental.",
+          "columns": {
+            "film_id": {"type": "Int64", "pk": true, "description": "Unique film identifier"},
+            "title": {"type": "Utf8", "description": "Film title"},
+            "description": {"type": "Utf8", "description": "Short synopsis of the film"},
+            "release_year": {"type": "Int64", "description": "Year the film was released"},
+            "language_id": {"type": "Int64", "fk": "languages.language_id", "description": "FK to languages"},
+            "rental_duration": {"type": "Int64", "description": "Default rental duration in days"},
+            "rental_rate": {"type": "Float64", "description": "Rental price per period in USD"},
+            "length_min": {"type": "Int64", "description": "Film length in minutes"},
+            "replacement_cost": {"type": "Float64", "description": "Cost to replace the DVD if lost"},
+            "rating": {"type": "Utf8", "description": "MPAA rating: G, PG, PG-13, R, NC-17"},
+            "special_features": {"type": "Utf8", "nullable": true, "description": "Comma-separated list: Trailers, Commentaries, Deleted Scenes, Behind the Scenes"}
+          }
+        },
+        "film_actor": {
+          "description": "Many-to-many relationship between films and actors.",
+          "columns": {
+            "actor_id": {"type": "Int64", "pk": true, "fk": "actors.actor_id", "description": "FK to actors"},
+            "film_id": {"type": "Int64", "pk": true, "fk": "films.film_id", "description": "FK to films"}
+          }
+        },
+        "film_category_map": {
+          "description": "Many-to-many mapping between films and categories.",
+          "columns": {
+            "film_id": {"type": "Int64", "pk": true, "fk": "films.film_id", "description": "FK to films"},
+            "category_id": {"type": "Int64", "pk": true, "fk": "film_categories.category_id", "description": "FK to film_categories"}
+          }
+        },
+        "countries": {
+          "description": "Countries.",
+          "columns": {
+            "country_id": {"type": "Int64", "pk": true, "description": "Unique country identifier"},
+            "country": {"type": "Utf8", "description": "Country name"}
+          }
+        },
+        "cities": {
+          "description": "Cities within countries.",
+          "columns": {
+            "city_id": {"type": "Int64", "pk": true, "description": "Unique city identifier"},
+            "city": {"type": "Utf8", "description": "City name"},
+            "country_id": {"type": "Int64", "fk": "countries.country_id", "description": "FK to countries"}
+          }
+        },
+        "addresses": {
+          "description": "Addresses for customers, staff, and stores.",
+          "columns": {
+            "address_id": {"type": "Int64", "pk": true, "description": "Unique address identifier"},
+            "address": {"type": "Utf8", "description": "Street address"},
+            "district": {"type": "Utf8", "description": "District or neighborhood"},
+            "city_id": {"type": "Int64", "fk": "cities.city_id", "description": "FK to cities"},
+            "postal_code": {"type": "Utf8", "nullable": true, "description": "Postal/ZIP code (nullable)"},
+            "phone": {"type": "Utf8", "description": "Phone number"}
+          }
+        },
+        "stores": {
+          "description": "Rental store locations.",
+          "columns": {
+            "store_id": {"type": "Int64", "pk": true, "description": "Unique store identifier"},
+            "manager_staff_id": {"type": "Int64", "fk": "staff.staff_id", "description": "FK to staff (store manager)"},
+            "address_id": {"type": "Int64", "fk": "addresses.address_id", "description": "FK to addresses"}
+          }
+        },
+        "staff": {
+          "description": "Store staff members.",
+          "columns": {
+            "staff_id": {"type": "Int64", "pk": true, "description": "Unique staff identifier"},
+            "first_name": {"type": "Utf8", "description": "First name"},
+            "last_name": {"type": "Utf8", "description": "Last name"},
+            "address_id": {"type": "Int64", "fk": "addresses.address_id", "description": "FK to addresses"},
+            "email": {"type": "Utf8", "description": "Email address"},
+            "store_id": {"type": "Int64", "fk": "stores.store_id", "description": "FK to stores (home store)"},
+            "active": {"type": "Boolean", "description": "Whether the staff member is active"}
+          }
+        },
+        "sakila_customers": {
+          "description": "Customers of the DVD rental stores.",
+          "columns": {
+            "customer_id": {"type": "Int64", "pk": true, "description": "Unique customer identifier"},
+            "store_id": {"type": "Int64", "fk": "stores.store_id", "description": "FK to stores (home store)"},
+            "first_name": {"type": "Utf8", "description": "First name"},
+            "last_name": {"type": "Utf8", "description": "Last name"},
+            "email": {"type": "Utf8", "description": "Email address"},
+            "address_id": {"type": "Int64", "fk": "addresses.address_id", "description": "FK to addresses"},
+            "active": {"type": "Boolean", "description": "Whether the customer account is active"},
+            "create_date": {"type": "Utf8", "description": "Account creation date (YYYY-MM-DD)"}
+          }
+        },
+        "inventory": {
+          "description": "Physical DVD copies in stock at each store.",
+          "columns": {
+            "inventory_id": {"type": "Int64", "pk": true, "description": "Unique inventory item identifier"},
+            "film_id": {"type": "Int64", "fk": "films.film_id", "description": "FK to films"},
+            "store_id": {"type": "Int64", "fk": "stores.store_id", "description": "FK to stores"}
+          }
+        },
+        "rentals": {
+          "description": "Individual rental transactions.",
+          "columns": {
+            "rental_id": {"type": "Int64", "pk": true, "description": "Unique rental identifier"},
+            "rental_date": {"type": "Utf8", "description": "Date and time of rental (YYYY-MM-DD HH:MM:SS)"},
+            "inventory_id": {"type": "Int64", "fk": "inventory.inventory_id", "description": "FK to inventory"},
+            "customer_id": {"type": "Int64", "fk": "sakila_customers.customer_id", "description": "FK to customers"},
+            "return_date": {"type": "Utf8", "nullable": true, "description": "Date of return (nullable if not yet returned)"},
+            "staff_id": {"type": "Int64", "fk": "staff.staff_id", "description": "FK to staff who processed the rental"}
+          }
+        },
+        "payments": {
+          "description": "Rental payments.",
+          "columns": {
+            "payment_id": {"type": "Int64", "pk": true, "description": "Unique payment identifier"},
+            "customer_id": {"type": "Int64", "fk": "sakila_customers.customer_id", "description": "FK to customers"},
+            "staff_id": {"type": "Int64", "fk": "staff.staff_id", "description": "FK to staff who processed payment"},
+            "rental_id": {"type": "Int64", "fk": "rentals.rental_id", "description": "FK to rentals"},
+            "amount": {"type": "Float64", "description": "Payment amount in USD"},
+            "payment_date": {"type": "Utf8", "description": "Date and time of payment (YYYY-MM-DD HH:MM:SS)"}
+          }
+        }
+      },
+      "foreign_keys": [
+        ["films.language_id", "languages.language_id"],
+        ["film_actor.actor_id", "actors.actor_id"],
+        ["film_actor.film_id", "films.film_id"],
+        ["film_category_map.film_id", "films.film_id"],
+        ["film_category_map.category_id", "film_categories.category_id"],
+        ["cities.country_id", "countries.country_id"],
+        ["addresses.city_id", "cities.city_id"],
+        ["stores.address_id", "addresses.address_id"],
+        ["staff.address_id", "addresses.address_id"],
+        ["staff.store_id", "stores.store_id"],
+        ["sakila_customers.store_id", "stores.store_id"],
+        ["sakila_customers.address_id", "addresses.address_id"],
+        ["inventory.film_id", "films.film_id"],
+        ["inventory.store_id", "stores.store_id"],
+        ["rentals.inventory_id", "inventory.inventory_id"],
+        ["rentals.customer_id", "sakila_customers.customer_id"],
+        ["rentals.staff_id", "staff.staff_id"],
+        ["payments.customer_id", "sakila_customers.customer_id"],
+        ["payments.staff_id", "staff.staff_id"],
+        ["payments.rental_id", "rentals.rental_id"]
+      ]
+    },
+
+    "tpch": {
+      "description": "TPC-H decision support benchmark. 8 tables modeling a parts supplier / order management system. Standard for analytical query benchmarking.",
+      "source": "TPC Benchmark H v2.17",
+      "tables": {
+        "tpch_region": {
+          "description": "World regions.",
+          "columns": {
+            "r_regionkey": {"type": "Int64", "pk": true, "description": "Unique region key"},
+            "r_name": {"type": "Utf8", "description": "Region name (AFRICA, AMERICA, ASIA, EUROPE, MIDDLE EAST)"},
+            "r_comment": {"type": "Utf8", "description": "Free-text comment"}
+          }
+        },
+        "tpch_nation": {
+          "description": "Nations belonging to regions.",
+          "columns": {
+            "n_nationkey": {"type": "Int64", "pk": true, "description": "Unique nation key"},
+            "n_name": {"type": "Utf8", "description": "Nation name (e.g. FRANCE, GERMANY, UNITED STATES)"},
+            "n_regionkey": {"type": "Int64", "fk": "tpch_region.r_regionkey", "description": "FK to region"},
+            "n_comment": {"type": "Utf8", "description": "Free-text comment"}
+          }
+        },
+        "tpch_supplier": {
+          "description": "Parts suppliers.",
+          "columns": {
+            "s_suppkey": {"type": "Int64", "pk": true, "description": "Unique supplier key"},
+            "s_name": {"type": "Utf8", "description": "Supplier name"},
+            "s_address": {"type": "Utf8", "description": "Street address"},
+            "s_nationkey": {"type": "Int64", "fk": "tpch_nation.n_nationkey", "description": "FK to nation"},
+            "s_phone": {"type": "Utf8", "description": "Phone number"},
+            "s_acctbal": {"type": "Float64", "description": "Account balance in USD"},
+            "s_comment": {"type": "Utf8", "description": "Free-text comment"}
+          }
+        },
+        "tpch_part": {
+          "description": "Parts catalog.",
+          "columns": {
+            "p_partkey": {"type": "Int64", "pk": true, "description": "Unique part key"},
+            "p_name": {"type": "Utf8", "description": "Part name"},
+            "p_mfgr": {"type": "Utf8", "description": "Manufacturer (Manufacturer#1 through Manufacturer#5)"},
+            "p_brand": {"type": "Utf8", "description": "Brand (Brand#11 through Brand#55)"},
+            "p_type": {"type": "Utf8", "description": "Part type (e.g. STANDARD POLISHED TIN)"},
+            "p_size": {"type": "Int64", "description": "Part size (1-50)"},
+            "p_container": {"type": "Utf8", "description": "Container type (e.g. SM CASE, LG BOX)"},
+            "p_retailprice": {"type": "Float64", "description": "Retail price in USD"},
+            "p_comment": {"type": "Utf8", "description": "Free-text comment"}
+          }
+        },
+        "tpch_partsupp": {
+          "description": "Parts supplied by suppliers (many-to-many with additional attributes).",
+          "columns": {
+            "ps_partkey": {"type": "Int64", "pk": true, "fk": "tpch_part.p_partkey", "description": "FK to part (composite PK)"},
+            "ps_suppkey": {"type": "Int64", "pk": true, "fk": "tpch_supplier.s_suppkey", "description": "FK to supplier (composite PK)"},
+            "ps_availqty": {"type": "Int64", "description": "Available quantity from this supplier"},
+            "ps_supplycost": {"type": "Float64", "description": "Cost from this supplier in USD"},
+            "ps_comment": {"type": "Utf8", "description": "Free-text comment"}
+          }
+        },
+        "tpch_customer": {
+          "description": "Customers who place orders.",
+          "columns": {
+            "c_custkey": {"type": "Int64", "pk": true, "description": "Unique customer key"},
+            "c_name": {"type": "Utf8", "description": "Customer name"},
+            "c_address": {"type": "Utf8", "description": "Street address"},
+            "c_nationkey": {"type": "Int64", "fk": "tpch_nation.n_nationkey", "description": "FK to nation"},
+            "c_phone": {"type": "Utf8", "description": "Phone number"},
+            "c_acctbal": {"type": "Float64", "description": "Account balance in USD"},
+            "c_mktsegment": {"type": "Utf8", "description": "Market segment: AUTOMOBILE, BUILDING, FURNITURE, HOUSEHOLD, MACHINERY"},
+            "c_comment": {"type": "Utf8", "description": "Free-text comment"}
+          }
+        },
+        "tpch_orders": {
+          "description": "Customer orders (header level).",
+          "columns": {
+            "o_orderkey": {"type": "Int64", "pk": true, "description": "Unique order key"},
+            "o_custkey": {"type": "Int64", "fk": "tpch_customer.c_custkey", "description": "FK to customer"},
+            "o_orderstatus": {"type": "Utf8", "description": "Order status: O (open), F (fulfilled), P (partial)"},
+            "o_totalprice": {"type": "Float64", "description": "Total order price in USD"},
+            "o_orderdate": {"type": "Utf8", "description": "Order date (YYYY-MM-DD)"},
+            "o_orderpriority": {"type": "Utf8", "description": "Priority: 1-URGENT, 2-HIGH, 3-MEDIUM, 4-NOT SPECIFIED, 5-LOW"},
+            "o_clerk": {"type": "Utf8", "description": "Clerk who handled the order (Clerk#000000XXX)"},
+            "o_shippriority": {"type": "Int64", "description": "Shipping priority (0)"},
+            "o_comment": {"type": "Utf8", "description": "Free-text comment"}
+          }
+        },
+        "tpch_lineitem": {
+          "description": "Order line items (largest table in TPC-H).",
+          "columns": {
+            "l_orderkey": {"type": "Int64", "fk": "tpch_orders.o_orderkey", "description": "FK to orders"},
+            "l_partkey": {"type": "Int64", "fk": "tpch_part.p_partkey", "description": "FK to part"},
+            "l_suppkey": {"type": "Int64", "fk": "tpch_supplier.s_suppkey", "description": "FK to supplier"},
+            "l_linenumber": {"type": "Int64", "description": "Line number within the order (1-7)"},
+            "l_quantity": {"type": "Float64", "description": "Quantity ordered"},
+            "l_extendedprice": {"type": "Float64", "description": "Extended price = quantity * unit price"},
+            "l_discount": {"type": "Float64", "description": "Discount percentage (0.00 to 0.10)"},
+            "l_tax": {"type": "Float64", "description": "Tax rate (0.00 to 0.08)"},
+            "l_returnflag": {"type": "Utf8", "description": "Return flag: R (returned), A (accepted), N (none)"},
+            "l_linestatus": {"type": "Utf8", "description": "Line status: O (open), F (fulfilled)"},
+            "l_shipdate": {"type": "Utf8", "description": "Ship date (YYYY-MM-DD)"},
+            "l_commitdate": {"type": "Utf8", "description": "Commitment date (YYYY-MM-DD)"},
+            "l_receiptdate": {"type": "Utf8", "description": "Receipt date (YYYY-MM-DD)"},
+            "l_shipinstruct": {"type": "Utf8", "description": "Shipping instruction: DELIVER IN PERSON, COLLECT COD, NONE, TAKE BACK RETURN"},
+            "l_shipmode": {"type": "Utf8", "description": "Shipping mode: REG AIR, AIR, RAIL, SHIP, TRUCK, MAIL, FOB"},
+            "l_comment": {"type": "Utf8", "description": "Free-text comment"}
+          }
+        }
+      },
+      "foreign_keys": [
+        ["tpch_nation.n_regionkey", "tpch_region.r_regionkey"],
+        ["tpch_supplier.s_nationkey", "tpch_nation.n_nationkey"],
+        ["tpch_partsupp.ps_partkey", "tpch_part.p_partkey"],
+        ["tpch_partsupp.ps_suppkey", "tpch_supplier.s_suppkey"],
+        ["tpch_customer.c_nationkey", "tpch_nation.n_nationkey"],
+        ["tpch_orders.o_custkey", "tpch_customer.c_custkey"],
+        ["tpch_lineitem.l_orderkey", "tpch_orders.o_orderkey"],
+        ["tpch_lineitem.l_partkey", "tpch_part.p_partkey"],
+        ["tpch_lineitem.l_suppkey", "tpch_supplier.s_suppkey"]
+      ]
+    },
+
+    "spider_mini": {
+      "description": "Selected mini-databases from Spider 1.0 benchmark — small focused schemas used for text-to-SQL evaluation.",
+      "source": "Spider 1.0 (Yale)",
+      "tables": {
+        "concert_singer_singer": {
+          "description": "Singers (from Spider concert_singer DB).",
+          "columns": {
+            "singer_id": {"type": "Int64", "pk": true, "description": "Unique singer identifier"},
+            "name": {"type": "Utf8", "description": "Singer name"},
+            "country": {"type": "Utf8", "description": "Country of origin"},
+            "song_name": {"type": "Utf8", "description": "Name of a famous song"},
+            "song_release_year": {"type": "Utf8", "description": "Year the song was released"},
+            "age": {"type": "Int64", "description": "Singer's age"},
+            "is_male": {"type": "Boolean", "description": "Whether the singer is male"}
+          }
+        },
+        "concert_singer_concert": {
+          "description": "Concert events.",
+          "columns": {
+            "concert_id": {"type": "Int64", "pk": true, "description": "Unique concert identifier"},
+            "concert_name": {"type": "Utf8", "description": "Name of the concert"},
+            "theme": {"type": "Utf8", "description": "Concert theme (e.g. Autumn, Free, Wild)"},
+            "stadium_id": {"type": "Int64", "fk": "concert_singer_stadium.stadium_id", "description": "FK to stadium"},
+            "year": {"type": "Utf8", "description": "Year of the concert"}
+          }
+        },
+        "concert_singer_stadium": {
+          "description": "Stadiums where concerts are held.",
+          "columns": {
+            "stadium_id": {"type": "Int64", "pk": true, "description": "Unique stadium identifier"},
+            "location": {"type": "Utf8", "description": "City/location of the stadium"},
+            "name": {"type": "Utf8", "description": "Stadium name"},
+            "capacity": {"type": "Int64", "description": "Maximum capacity"},
+            "average_attendance": {"type": "Int64", "description": "Average event attendance"}
+          }
+        },
+        "concert_singer_performance": {
+          "description": "Singer performances at concerts (many-to-many).",
+          "columns": {
+            "singer_id": {"type": "Int64", "fk": "concert_singer_singer.singer_id", "description": "FK to singer"},
+            "concert_id": {"type": "Int64", "fk": "concert_singer_concert.concert_id", "description": "FK to concert"}
+          }
+        },
+        "world_country": {
+          "description": "Countries of the world (from Spider world_1 DB).",
+          "columns": {
+            "code": {"type": "Utf8", "pk": true, "description": "3-letter country code (e.g. FRA, DEU)"},
+            "name": {"type": "Utf8", "description": "Country name"},
+            "continent": {"type": "Utf8", "description": "Continent (Asia, Europe, Africa, North America, South America, Oceania, Antarctica)"},
+            "region": {"type": "Utf8", "description": "World region (e.g. Western Europe, Southern Asia)"},
+            "surface_area": {"type": "Float64", "description": "Surface area in km²"},
+            "population": {"type": "Int64", "description": "Total population"},
+            "life_expectancy": {"type": "Float64", "nullable": true, "description": "Average life expectancy (nullable)"},
+            "gnp": {"type": "Float64", "nullable": true, "description": "Gross National Product in USD (nullable)"},
+            "government_form": {"type": "Utf8", "description": "Form of government"},
+            "head_of_state": {"type": "Utf8", "nullable": true, "description": "Head of state name (nullable)"}
+          }
+        },
+        "world_city": {
+          "description": "Cities of the world.",
+          "columns": {
+            "city_id": {"type": "Int64", "pk": true, "description": "Unique city identifier"},
+            "name": {"type": "Utf8", "description": "City name"},
+            "country_code": {"type": "Utf8", "fk": "world_country.code", "description": "FK to country"},
+            "district": {"type": "Utf8", "description": "District or state"},
+            "population": {"type": "Int64", "description": "City population"}
+          }
+        },
+        "world_country_language": {
+          "description": "Languages spoken in each country.",
+          "columns": {
+            "country_code": {"type": "Utf8", "fk": "world_country.code", "description": "FK to country"},
+            "language": {"type": "Utf8", "description": "Language name"},
+            "is_official": {"type": "Boolean", "description": "Whether it's an official language"},
+            "percentage": {"type": "Float64", "description": "Percentage of population speaking this language"}
+          }
+        },
+        "pets_student": {
+          "description": "Students (from Spider pets_1 DB).",
+          "columns": {
+            "stu_id": {"type": "Int64", "pk": true, "description": "Unique student identifier"},
+            "last_name": {"type": "Utf8", "description": "Last name"},
+            "first_name": {"type": "Utf8", "description": "First name"},
+            "age": {"type": "Int64", "description": "Student age"},
+            "sex": {"type": "Utf8", "description": "Gender: M or F"},
+            "major": {"type": "Int64", "description": "Major department code"},
+            "advisor": {"type": "Int64", "description": "Advisor ID"},
+            "city_code": {"type": "Utf8", "description": "City code of residence"}
+          }
+        },
+        "pets_has_pet": {
+          "description": "Student-pet ownership relationship.",
+          "columns": {
+            "stu_id": {"type": "Int64", "fk": "pets_student.stu_id", "description": "FK to student"},
+            "pet_id": {"type": "Int64", "fk": "pets_pet.pet_id", "description": "FK to pet"}
+          }
+        },
+        "pets_pet": {
+          "description": "Pets.",
+          "columns": {
+            "pet_id": {"type": "Int64", "pk": true, "description": "Unique pet identifier"},
+            "pet_type": {"type": "Utf8", "description": "Type of pet (cat, dog, hamster, etc.)"},
+            "pet_age": {"type": "Int64", "description": "Age of the pet"},
+            "weight": {"type": "Float64", "description": "Weight in kg"}
+          }
+        },
+        "car_maker": {
+          "description": "Car manufacturers (from Spider car_1 DB).",
+          "columns": {
+            "id": {"type": "Int64", "pk": true, "description": "Unique maker identifier"},
+            "maker": {"type": "Utf8", "description": "Manufacturer name (e.g. Toyota, Ford)"},
+            "full_name": {"type": "Utf8", "description": "Full company name"},
+            "country": {"type": "Utf8", "description": "Country of headquarters"}
+          }
+        },
+        "car_data": {
+          "description": "Car specifications.",
+          "columns": {
+            "car_id": {"type": "Int64", "pk": true, "description": "Unique car identifier"},
+            "maker_id": {"type": "Int64", "fk": "car_maker.id", "description": "FK to car_maker"},
+            "model": {"type": "Utf8", "description": "Car model name"},
+            "mpg": {"type": "Float64", "description": "Miles per gallon"},
+            "cylinders": {"type": "Int64", "description": "Number of cylinders"},
+            "horsepower": {"type": "Float64", "nullable": true, "description": "Horsepower (nullable)"},
+            "weight": {"type": "Int64", "description": "Vehicle weight in lbs"},
+            "accelerate": {"type": "Float64", "description": "0-60 acceleration time in seconds"},
+            "year": {"type": "Int64", "description": "Model year"}
+          }
+        },
+        "flight_airport": {
+          "description": "Airports (from Spider flight_2 DB).",
+          "columns": {
+            "airport_id": {"type": "Int64", "pk": true, "description": "Unique airport identifier"},
+            "airport_name": {"type": "Utf8", "description": "Airport name"},
+            "city": {"type": "Utf8", "description": "City"},
+            "country": {"type": "Utf8", "description": "Country"},
+            "iata": {"type": "Utf8", "description": "IATA 3-letter code (e.g. CDG, JFK)"},
+            "icao": {"type": "Utf8", "description": "ICAO 4-letter code"},
+            "altitude": {"type": "Int64", "description": "Altitude in feet"}
+          }
+        },
+        "flight_airline": {
+          "description": "Airlines.",
+          "columns": {
+            "airline_id": {"type": "Int64", "pk": true, "description": "Unique airline identifier"},
+            "name": {"type": "Utf8", "description": "Airline name"},
+            "iata": {"type": "Utf8", "nullable": true, "description": "IATA 2-letter code (nullable)"},
+            "icao": {"type": "Utf8", "nullable": true, "description": "ICAO 3-letter code (nullable)"},
+            "country": {"type": "Utf8", "description": "Country of registration"},
+            "active": {"type": "Boolean", "description": "Whether the airline is currently active"}
+          }
+        },
+        "flight_route": {
+          "description": "Flight routes between airports.",
+          "columns": {
+            "route_id": {"type": "Int64", "pk": true, "description": "Unique route identifier"},
+            "airline_id": {"type": "Int64", "fk": "flight_airline.airline_id", "description": "FK to airline"},
+            "src_airport_id": {"type": "Int64", "fk": "flight_airport.airport_id", "description": "FK to source airport"},
+            "dst_airport_id": {"type": "Int64", "fk": "flight_airport.airport_id", "description": "FK to destination airport"},
+            "codeshare": {"type": "Boolean", "description": "Whether this is a codeshare route"},
+            "stops": {"type": "Int64", "description": "Number of stops (0 = direct)"}
+          }
+        }
+      },
+      "foreign_keys": [
+        ["concert_singer_concert.stadium_id", "concert_singer_stadium.stadium_id"],
+        ["concert_singer_performance.singer_id", "concert_singer_singer.singer_id"],
+        ["concert_singer_performance.concert_id", "concert_singer_concert.concert_id"],
+        ["world_city.country_code", "world_country.code"],
+        ["world_country_language.country_code", "world_country.code"],
+        ["pets_has_pet.stu_id", "pets_student.stu_id"],
+        ["pets_has_pet.pet_id", "pets_pet.pet_id"],
+        ["car_data.maker_id", "car_maker.id"],
+        ["flight_route.airline_id", "flight_airline.airline_id"],
+        ["flight_route.src_airport_id", "flight_airport.airport_id"],
+        ["flight_route.dst_airport_id", "flight_airport.airport_id"]
+      ]
+    }
+  }
+}

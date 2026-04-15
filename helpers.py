@@ -1,11 +1,13 @@
-from pydantic import BaseModel
-import requests
+import json
+import os
+import re
 import subprocess
+import tempfile
 import threading
 import time
-import os
-import tempfile
-import re
+
+from pydantic import BaseModel
+import requests
 
 
 class CodeMetrics(BaseModel):
@@ -23,14 +25,14 @@ class ExecutionMetrics(BaseModel):
 
 
 def _parse_mem_to_mb(value: str) -> float:
-    m = re.match(r"([\d.]+)\s*([A-Za-z]+)", value.strip())
-    if not m:
-        raise ValueError(f"Invalid format: {value}")
+    match = re.match(r"([\d.]+)\s*([A-Za-z]+)", value.strip())
+    if not match:
+        return 0.0
 
-    num = float(m.group(1))
-    unit = m.group(2)
+    number = float(match.group(1))
+    unit = match.group(2)
 
-    units = {
+    factors = {
         "B": 1 / (1024 * 1024),
         "KiB": 1 / 1024,
         "MiB": 1,
@@ -38,11 +40,7 @@ def _parse_mem_to_mb(value: str) -> float:
         "Gi": 1024,
         "TiB": 1024 * 1024,
     }
-
-    if unit not in units:
-        raise ValueError(f"Unsupported memory unit: {unit}")
-
-    return num * units[unit]
+    return number * factors.get(unit, 0.0)
 
 
 def _get_container_ram_mb(container_id: str) -> float:
@@ -128,7 +126,7 @@ def get_code(
     result: dict = {}
     error: dict = {}
 
-    def _do_request() -> None:
+    def do_request() -> None:
         try:
             response = requests.post(
                 f"{base_url}/chat",
@@ -140,7 +138,7 @@ def get_code(
             error["exception"] = exc
 
     start = time.perf_counter()
-    thread = threading.Thread(target=_do_request)
+    thread = threading.Thread(target=do_request)
     thread.start()
 
     peak_ram_mb = 0.0
@@ -152,8 +150,8 @@ def get_code(
         time.sleep(sample_interval)
 
     thread.join()
-    duration_seconds = time.perf_counter() - start
 
+    duration_seconds = time.perf_counter() - start
     peak_ram_mb = max(peak_ram_mb, _get_container_ram_mb(container_id))
     peak_gpu_mb = max(peak_gpu_mb, _get_container_gpu_mb(container_id))
 
@@ -163,22 +161,67 @@ def get_code(
     response = result["response"]
     response.raise_for_status()
     data = response.json()
-    code_pure = data.get("response", response.text)
 
     return CodeMetrics(
-        response_text=code_pure,
+        response_text=data.get("response", response.text),
         duration_seconds=duration_seconds,
         peak_ram_mb=peak_ram_mb,
         peak_gpu_mb=peak_gpu_mb,
     )
 
 
-def execute_code(container_id: str, code: str) -> ExecutionMetrics:
-    wrapped_code = (
-        "import polars as pl\n"
-        f"{code}\n"
-        "print(result)\n"
+def _build_load_table_code(name: str, dataset: dict) -> str:
+    file_name = dataset["file_name"]
+    file_format = dataset.get("format", "parquet")
+
+    if file_format == "csv":
+        return f'{name} = pl.read_csv("{file_name}")'
+
+    return f'{name} = pl.read_parquet("{file_name}")'
+
+
+def _build_runner_code(code: str, datasets: dict[str, dict]) -> str:
+    load_tables = "\n".join(
+        _build_load_table_code(name, dataset)
+        for name, dataset in datasets.items()
     )
+
+    return f"""
+import hashlib
+import json
+import polars as pl
+
+{load_tables}
+
+{code}
+
+if not isinstance(result, pl.DataFrame):
+    raise TypeError("result must be a Polars DataFrame")
+
+result = result.select(result.columns)
+
+if result.columns:
+    result = result.sort(result.columns)
+
+csv_text = result.write_csv(file=None)
+result_hash = hashlib.sha256(csv_text.encode("utf-8")).hexdigest()[:16]
+
+payload = {{
+    "columns": result.columns,
+    "shape": {{
+        "rows": result.height,
+        "cols": result.width,
+    }},
+    "hash": result_hash,
+    "rows": result.to_dicts(),
+}}
+
+print(json.dumps(payload, default=str))
+""".strip()
+
+
+def execute_code(container_id: str, code: str, datasets: dict[str, dict]) -> ExecutionMetrics:
+    wrapped_code = _build_runner_code(code, datasets)
 
     with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
         f.write(wrapped_code)

@@ -1,5 +1,470 @@
 [
   {
+    "run_id": "be9477f0-0457-45eb-aad8-cbd1887f0f42",
+    "created_at": "2026-03-17 14:04:38",
+    "mode": "repo",
+    "label": "Repo experiment",
+    "config": {
+      "repo_url": "https://github.com/nisseya/submission_fake"
+    },
+    "total_questions": 15,
+    "success_count": 15,
+    "exact_match_count": 0,
+    "total_generation_duration_seconds": 33.83566299400991,
+    "total_execution_duration_seconds": 9.499875955050811,
+    "total_duration_seconds": 43.33553894906072,
+    "peak_ram_mb": 39.0,
+    "peak_gpu_mb": null,
+    "payload": {
+      "generator_container_id": "bedc1665e355fe8e73870e9b2e6eea58182b46a84b77d0ad6eb886c08ac8ea95",
+      "executor_container_id": "b9ac804fc534482eb929ede78d70f68df38524eb3253e9333a0bdf3788c1df3f",
+      "url": "http://127.0.0.1:46655",
+      "generated_answers": [
+        {
+          "id": "q01",
+          "question": "Count premium customers by country from customers.",
+          "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\n\nresult = (\n    customers\n    .filter(pl.col(\"is_premium\"))\n    .group_by(\"country\")\n    .agg(pl.len().alias(\"premium_customers\"))\n    .sort(\"premium_customers\", descending=True)\n)",
+          "generation_duration_seconds": 2.9048961619846523,
+          "peak_ram_mb": 39.0,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q02",
+          "question": "Compute total revenue and average discount_amount for completed orders grouped by channel from orders.",
+          "code": "orders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\nresult = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .group_by(\"channel\")\n    .agg(\n        pl.col(\"amount\").sum().alias(\"total_revenue\"),\n        pl.col(\"discount_amount\").mean().alias(\"avg_discount_amount\"),\n    )\n)",
+          "generation_duration_seconds": 2.390910544025246,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q03",
+          "question": "Find the top 10 brands by average base_price among active products from products.",
+          "code": "products = pl.read_csv(\"/app/data/products.csv\", try_parse_dates=True)\n\nresult = (\n    products\n    .filter(pl.col(\"is_active\"))\n    .group_by(\"brand\")\n    .agg(pl.col(\"base_price\").mean().alias(\"avg_base_price\"))\n    .sort(\"avg_base_price\", descending=True)\n    .head(10)\n)",
+          "generation_duration_seconds": 2.0760756310191937,
+          "peak_ram_mb": 39.0,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q04",
+          "question": "Count events grouped by event_type and device from events.",
+          "code": "events = pl.read_csv(\"/app/data/events.csv\", try_parse_dates=True)\n\nresult = (\n    events\n    .group_by([\"event_type\", \"device\"])\n    .agg(pl.len().alias(\"event_count\"))\n)",
+          "generation_duration_seconds": 2.2022655499749817,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q05",
+          "question": "Compute total quantity and gross sales per product_id from order_items where gross_sales = quantity * unit_price.",
+          "code": "order_items = pl.read_csv(\"/app/data/order_items.csv\", try_parse_dates=True)\n\nresult = (\n    order_items\n    .with_columns((pl.col(\"quantity\") * pl.col(\"unit_price\")).alias(\"gross_sales\"))\n    .group_by(\"product_id\")\n    .agg(\n        pl.col(\"quantity\").sum().alias(\"total_quantity\"),\n        pl.col(\"gross_sales\").sum().alias(\"gross_sales\"),\n    )\n)",
+          "generation_duration_seconds": 2.2286256580264308,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q06",
+          "question": "For each customer segment, compute completed order count, total revenue, and average order amount using customers and orders.",
+          "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\norders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\nresult = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .join(customers, on=\"customer_id\", how=\"inner\")\n    .group_by(\"segment\")\n    .agg(\n        pl.len().alias(\"completed_order_count\"),\n        pl.col(\"amount\").sum().alias(\"total_revenue\"),\n        pl.col(\"amount\").mean().alias(\"avg_order_amount\"),\n    )\n)",
+          "generation_duration_seconds": 2.217135282000527,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q07",
+          "question": "Compute net sales by category using order_items and products where net_sales = quantity * unit_price - item_discount.",
+          "code": "order_items = pl.read_csv(\"/app/data/order_items.csv\", try_parse_dates=True)\nproducts = pl.read_csv(\"/app/data/products.csv\", try_parse_dates=True)\n\nresult = (\n    order_items\n    .join(products.select([\"product_id\", \"category\"]), on=\"product_id\", how=\"inner\")\n    .with_columns((pl.col(\"quantity\") * pl.col(\"unit_price\") - pl.col(\"item_discount\")).alias(\"net_sales\"))\n    .group_by(\"category\")\n    .agg(pl.col(\"net_sales\").sum().alias(\"net_sales\"))\n)",
+          "generation_duration_seconds": 2.249719451996498,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q08",
+          "question": "Compute average number of sessions per customer grouped by is_premium using customers and events.",
+          "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\nevents = pl.read_csv(\"/app/data/events.csv\", try_parse_dates=True)\n\nsessions_per_customer = (\n    events\n    .group_by(\"customer_id\")\n    .agg(pl.col(\"session_id\").n_unique().alias(\"session_count\"))\n)\n\nresult = (\n    customers\n    .join(sessions_per_customer, on=\"customer_id\", how=\"inner\")\n    .group_by(\"is_premium\")\n    .agg(pl.col(\"session_count\").mean().alias(\"avg_sessions_per_customer\"))\n)",
+          "generation_duration_seconds": 2.2304825979517773,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q09",
+          "question": "Compute daily revenue for completed orders and a 7-day rolling average from orders.",
+          "code": "orders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\ndaily = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .with_columns(pl.col(\"order_date\").dt.date().alias(\"day\"))\n    .group_by(\"day\")\n    .agg(pl.col(\"amount\").sum().alias(\"daily_revenue\"))\n    .sort(\"day\")\n)\n\nresult = daily.with_columns(\n    pl.col(\"daily_revenue\").rolling_mean(window_size=7).alias(\"rolling_7d_avg_revenue\")\n)",
+          "generation_duration_seconds": 2.218513116997201,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q10",
+          "question": "Find top 20 customers by lifetime_value with at least 5 completed orders using customers and orders.",
+          "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\norders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\nqualified = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .group_by(\"customer_id\")\n    .agg(pl.len().alias(\"completed_order_count\"))\n    .filter(pl.col(\"completed_order_count\") >= 5)\n)\n\nresult = (\n    qualified\n    .join(customers.select([\"customer_id\", \"lifetime_value\"]), on=\"customer_id\", how=\"inner\")\n    .sort(\"lifetime_value\", descending=True)\n    .head(20)\n)",
+          "generation_duration_seconds": 2.1946047300007194,
+          "peak_ram_mb": 39.0,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q11",
+          "question": "Compute brand share of quantity sold within each category using products and order_items.",
+          "code": "products = pl.read_csv(\"/app/data/products.csv\", try_parse_dates=True)\norder_items = pl.read_csv(\"/app/data/order_items.csv\", try_parse_dates=True)\n\nbrand_qty = (\n    order_items\n    .join(products.select([\"product_id\", \"category\", \"brand\"]), on=\"product_id\", how=\"inner\")\n    .group_by([\"category\", \"brand\"])\n    .agg(pl.col(\"quantity\").sum().alias(\"brand_quantity\"))\n)\n\ncategory_qty = (\n    brand_qty\n    .group_by(\"category\")\n    .agg(pl.col(\"brand_quantity\").sum().alias(\"category_quantity\"))\n)\n\nresult = (\n    brand_qty\n    .join(category_qty, on=\"category\", how=\"inner\")\n    .with_columns(\n        (pl.col(\"brand_quantity\") / pl.col(\"category_quantity\")).alias(\"brand_share\")\n    )\n)",
+          "generation_duration_seconds": 2.255523562023882,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q12",
+          "question": "Compute time difference in seconds between consecutive events per customer from events.",
+          "code": "events = pl.read_csv(\"/app/data/events.csv\", try_parse_dates=True)\n\nresult = (\n    events\n    .sort([\"customer_id\", \"event_time\"])\n    .with_columns(\n        (\n            pl.col(\"event_time\").cast(pl.Int64).diff().over(\"customer_id\") / 1_000_000\n        ).alias(\"seconds_since_previous_event\")\n    )\n)",
+          "generation_duration_seconds": 2.1137421400053427,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q13",
+          "question": "Compute conversion rate per country as customers with completed orders divided by customers with events using customers, orders, and events.",
+          "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\norders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\nevents = pl.read_csv(\"/app/data/events.csv\", try_parse_dates=True)\n\ncustomers_with_orders = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .select(\"customer_id\")\n    .unique()\n    .join(customers.select([\"customer_id\", \"country\"]), on=\"customer_id\", how=\"inner\")\n    .group_by(\"country\")\n    .agg(pl.len().alias(\"customers_with_completed_orders\"))\n)\n\ncustomers_with_events = (\n    events\n    .select(\"customer_id\")\n    .unique()\n    .join(customers.select([\"customer_id\", \"country\"]), on=\"customer_id\", how=\"inner\")\n    .group_by(\"country\")\n    .agg(pl.len().alias(\"customers_with_events\"))\n)\n\nresult = (\n    customers_with_orders\n    .join(customers_with_events, on=\"country\", how=\"inner\")\n    .with_columns(\n        (\n            pl.col(\"customers_with_completed_orders\") / pl.col(\"customers_with_events\")\n        ).alias(\"conversion_rate\")\n    )\n)",
+          "generation_duration_seconds": 2.1840771160204895,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q14",
+          "question": "Find top 3 products by net sales within each category using products and order_items.",
+          "code": "products = pl.read_csv(\"/app/data/products.csv\", try_parse_dates=True)\norder_items = pl.read_csv(\"/app/data/order_items.csv\", try_parse_dates=True)\n\nsales = (\n    order_items\n    .join(products.select([\"product_id\", \"category\"]), on=\"product_id\", how=\"inner\")\n    .with_columns((pl.col(\"quantity\") * pl.col(\"unit_price\") - pl.col(\"item_discount\")).alias(\"net_sales\"))\n    .group_by([\"category\", \"product_id\"])\n    .agg(pl.col(\"net_sales\").sum().alias(\"net_sales\"))\n)\n\nresult = (\n    sales\n    .with_columns(\n        pl.col(\"net_sales\").rank(\"dense\", descending=True).over(\"category\").alias(\"rank_in_category\")\n    )\n    .filter(pl.col(\"rank_in_category\") <= 3)\n    .sort([\"category\", \"rank_in_category\", \"product_id\"])\n)",
+          "generation_duration_seconds": 2.1976258319918998,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        },
+        {
+          "id": "q15",
+          "question": "Compute median order amount and 90th percentile payment_delay_days per segment and month using customers and orders.",
+          "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\norders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\nresult = (\n    orders\n    .join(customers.select([\"customer_id\", \"segment\"]), on=\"customer_id\", how=\"inner\")\n    .with_columns(pl.col(\"order_date\").dt.truncate(\"1mo\").alias(\"month\"))\n    .group_by([\"segment\", \"month\"])\n    .agg(\n        pl.col(\"amount\").median().alias(\"median_order_amount\"),\n        pl.col(\"payment_delay_days\").quantile(0.9).alias(\"p90_payment_delay_days\"),\n    )\n)",
+          "generation_duration_seconds": 2.171465619991068,
+          "peak_ram_mb": 38.99,
+          "peak_gpu_mb": 0.0
+        }
+      ],
+      "executed_answers": [
+        {
+          "id": "q01",
+          "stdout": "shape: (3, 2)\n┌─────────┬───────────────────┐\n│ country ┆ premium_customers │\n│ ---     ┆ ---               │\n│ str     ┆ u32               │\n╞═════════╪═══════════════════╡\n│ FR      ┆ 2                 │\n│ US      ┆ 1                 │\n│ DE      ┆ 1                 │\n└─────────┴───────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 1.197107485961169,
+          "exact_match": null
+        },
+        {
+          "id": "q02",
+          "stdout": "shape: (3, 3)\n┌─────────┬───────────────┬─────────────────────┐\n│ channel ┆ total_revenue ┆ avg_discount_amount │\n│ ---     ┆ ---           ┆ ---                 │\n│ str     ┆ f64           ┆ f64                 │\n╞═════════╪═══════════════╪═════════════════════╡\n│ store   ┆ 680.0         ┆ 21.666667           │\n│ web     ┆ 790.0         ┆ 15.0                │\n│ mobile  ┆ 860.0         ┆ 13.0                │\n└─────────┴───────────────┴─────────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.9411386730498634,
+          "exact_match": null
+        },
+        {
+          "id": "q03",
+          "stdout": "shape: (3, 2)\n┌───────┬────────────────┐\n│ brand ┆ avg_base_price │\n│ ---   ┆ ---            │\n│ str   ┆ f64            │\n╞═══════╪════════════════╡\n│ Peak  ┆ 105.0          │\n│ Zen   ┆ 85.0           │\n│ Acme  ┆ 62.5           │\n└───────┴────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.8112137300195172,
+          "exact_match": null
+        },
+        {
+          "id": "q04",
+          "stdout": "shape: (8, 3)\n┌────────────┬────────┬─────────────┐\n│ event_type ┆ device ┆ event_count │\n│ ---        ┆ ---    ┆ ---         │\n│ str        ┆ str    ┆ u32         │\n╞════════════╪════════╪═════════════╡\n│ purchase   ┆ mobile ┆ 2           │\n│ view       ┆ web    ┆ 5           │\n│ view       ┆ mobile ┆ 6           │\n│ click      ┆ web    ┆ 4           │\n│ view       ┆ store  ┆ 1           │\n│ purchase   ┆ web    ┆ 2           │\n│ purchase   ┆ store  ┆ 1           │\n│ click      ┆ mobile ┆ 3           │\n└────────────┴────────┴─────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.5247810370055959,
+          "exact_match": null
+        },
+        {
+          "id": "q05",
+          "stdout": "shape: (6, 3)\n┌────────────┬────────────────┬─────────────┐\n│ product_id ┆ total_quantity ┆ gross_sales │\n│ ---        ┆ ---            ┆ ---         │\n│ i64        ┆ i64            ┆ f64         │\n╞════════════╪════════════════╪═════════════╡\n│ 1003       ┆ 5              ┆ 760.0       │\n│ 1006       ┆ 7              ┆ 425.0       │\n│ 1001       ┆ 6              ┆ 715.0       │\n│ 1002       ┆ 8              ┆ 350.0       │\n│ 1005       ┆ 5              ┆ 460.0       │\n│ 1004       ┆ 6              ┆ 580.0       │\n└────────────┴────────────────┴─────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.4628460160456598,
+          "exact_match": null
+        },
+        {
+          "id": "q06",
+          "stdout": "shape: (3, 4)\n┌─────────┬───────────────────────┬───────────────┬──────────────────┐\n│ segment ┆ completed_order_count ┆ total_revenue ┆ avg_order_amount │\n│ ---     ┆ ---                   ┆ ---           ┆ ---              │\n│ str     ┆ u32                   ┆ f64           ┆ f64              │\n╞═════════╪═══════════════════════╪═══════════════╪══════════════════╡\n│ A       ┆ 4                     ┆ 650.0         ┆ 162.5            │\n│ C       ┆ 4                     ┆ 780.0         ┆ 195.0            │\n│ B       ┆ 5                     ┆ 900.0         ┆ 180.0            │\n└─────────┴───────────────────────┴───────────────┴──────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.5489067279850133,
+          "exact_match": null
+        },
+        {
+          "id": "q07",
+          "stdout": "shape: (3, 2)\n┌─────────────┬───────────┐\n│ category    ┆ net_sales │\n│ ---         ┆ ---       │\n│ str         ┆ f64       │\n╞═════════════╪═══════════╡\n│ Electronics ┆ 978.0     │\n│ Sports      ┆ 845.0     │\n│ Home        ┆ 1270.0    │\n└─────────────┴───────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.49893731699557975,
+          "exact_match": null
+        },
+        {
+          "id": "q08",
+          "stdout": "shape: (2, 2)\n┌────────────┬───────────────────────────┐\n│ is_premium ┆ avg_sessions_per_customer │\n│ ---        ┆ ---                       │\n│ bool       ┆ f64                       │\n╞════════════╪═══════════════════════════╡\n│ true       ┆ 2.0                       │\n│ false      ┆ 1.75                      │\n└────────────┴───────────────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.48201630800031126,
+          "exact_match": null
+        },
+        {
+          "id": "q09",
+          "stdout": "shape: (12, 3)\n┌────────────┬───────────────┬────────────────────────┐\n│ day        ┆ daily_revenue ┆ rolling_7d_avg_revenue │\n│ ---        ┆ ---           ┆ ---                    │\n│ date       ┆ f64           ┆ f64                    │\n╞════════════╪═══════════════╪════════════════════════╡\n│ 2024-06-01 ┆ 400.0         ┆ null                   │\n│ 2024-06-02 ┆ 220.0         ┆ null                   │\n│ 2024-06-03 ┆ 150.0         ┆ null                   │\n│ 2024-06-04 ┆ 90.0          ┆ null                   │\n│ 2024-06-05 ┆ 210.0         ┆ null                   │\n│ …          ┆ …             ┆ …                      │\n│ 2024-06-09 ┆ 140.0         ┆ 158.571429             │\n│ 2024-06-10 ┆ 160.0         ┆ 150.0                  │\n│ 2024-06-11 ┆ 180.0         ┆ 154.285714             │\n│ 2024-06-12 ┆ 230.0         ┆ 174.285714             │\n│ 2024-06-13 ┆ 250.0         ┆ 180.0                  │\n└────────────┴───────────────┴────────────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.5868889020057395,
+          "exact_match": null
+        },
+        {
+          "id": "q10",
+          "stdout": "shape: (1, 3)\n┌─────────────┬───────────────────────┬────────────────┐\n│ customer_id ┆ completed_order_count ┆ lifetime_value │\n│ ---         ┆ ---                   ┆ ---            │\n│ i64         ┆ u32                   ┆ f64            │\n╞═════════════╪═══════════════════════╪════════════════╡\n│ 5           ┆ 5                     ┆ 990.0          │\n└─────────────┴───────────────────────┴────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.496948332991451,
+          "exact_match": null
+        },
+        {
+          "id": "q11",
+          "stdout": "shape: (4, 5)\n┌─────────────┬───────┬────────────────┬───────────────────┬─────────────┐\n│ category    ┆ brand ┆ brand_quantity ┆ category_quantity ┆ brand_share │\n│ ---         ┆ ---   ┆ ---            ┆ ---               ┆ ---         │\n│ str         ┆ str   ┆ i64            ┆ i64               ┆ f64         │\n╞═════════════╪═══════╪════════════════╪═══════════════════╪═════════════╡\n│ Sports      ┆ Peak  ┆ 12             ┆ 12                ┆ 1.0         │\n│ Electronics ┆ Acme  ┆ 14             ┆ 14                ┆ 1.0         │\n│ Home        ┆ Zen   ┆ 5              ┆ 11                ┆ 0.454545    │\n│ Home        ┆ Luma  ┆ 6              ┆ 11                ┆ 0.545455    │\n└─────────────┴───────┴────────────────┴───────────────────┴─────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.515066213964019,
+          "exact_match": null
+        },
+        {
+          "id": "q12",
+          "stdout": "shape: (24, 10)\n┌──────────┬────────────┬────────────┬────────────┬───┬────────┬──────────┬────────────┬───────────┐\n│ event_id ┆ customer_i ┆ session_id ┆ event_time ┆ … ┆ source ┆ page     ┆ duration_s ┆ seconds_s │\n│ ---      ┆ d          ┆ ---        ┆ ---        ┆   ┆ ---    ┆ ---      ┆ ec         ┆ ince_prev │\n│ i64      ┆ ---        ┆ str        ┆ datetime[μ ┆   ┆ str    ┆ str      ┆ ---        ┆ ious_even │\n│          ┆ i64        ┆            ┆ s]         ┆   ┆        ┆          ┆ f64        ┆ t         │\n│          ┆            ┆            ┆            ┆   ┆        ┆          ┆            ┆ ---       │\n│          ┆            ┆            ┆            ┆   ┆        ┆          ┆            ┆ f64       │\n╞══════════╪════════════╪════════════╪════════════╪═══╪════════╪══════════╪════════════╪═══════════╡\n│ 201      ┆ 1          ┆ s1         ┆ 2024-06-01 ┆ … ┆ ads    ┆ home     ┆ 30.0       ┆ null      │\n│          ┆            ┆            ┆ 10:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 202      ┆ 1          ┆ s1         ┆ 2024-06-01 ┆ … ┆ ads    ┆ product  ┆ 15.0       ┆ 300.0     │\n│          ┆            ┆            ┆ 10:05:00   ┆   ┆        ┆          ┆            ┆           │\n│ 203      ┆ 1          ┆ s2         ┆ 2024-06-02 ┆ … ┆ email  ┆ checkout ┆ 60.0       ┆ 82500.0   │\n│          ┆            ┆            ┆ 09:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 204      ┆ 2          ┆ s3         ┆ 2024-06-02 ┆ … ┆ seo    ┆ home     ┆ 25.0       ┆ null      │\n│          ┆            ┆            ┆ 08:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 205      ┆ 2          ┆ s3         ┆ 2024-06-02 ┆ … ┆ seo    ┆ product  ┆ 10.0       ┆ 420.0     │\n│          ┆            ┆            ┆ 08:07:00   ┆   ┆        ┆          ┆            ┆           │\n│ …        ┆ …          ┆ …          ┆ …          ┆ … ┆ …      ┆ …        ┆ …          ┆ …         │\n│ 220      ┆ 7          ┆ s12        ┆ 2024-06-12 ┆ … ┆ seo    ┆ product  ┆ 11.0       ┆ 1500.0    │\n│          ┆            ┆            ┆ 09:25:00   ┆   ┆        ┆          ┆            ┆           │\n│ 221      ┆ 8          ┆ s13        ┆ 2024-06-09 ┆ … ┆ ads    ┆ home     ┆ 23.0       ┆ null      │\n│          ┆            ┆            ┆ 12:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 222      ┆ 8          ┆ s13        ┆ 2024-06-09 ┆ … ┆ ads    ┆ product  ┆ 9.0        ┆ 300.0     │\n│          ┆            ┆            ┆ 12:05:00   ┆   ┆        ┆          ┆            ┆           │\n│ 223      ┆ 8          ┆ s14        ┆ 2024-06-10 ┆ … ┆ seo    ┆ home     ┆ 24.0       ┆ 89700.0   │\n│          ┆            ┆            ┆ 13:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 224      ┆ 8          ┆ s15        ┆ 2024-06-13 ┆ … ┆ email  ┆ checkout ┆ 72.0       ┆ 262800.0  │\n│          ┆            ┆            ┆ 14:00:00   ┆   ┆        ┆          ┆            ┆           │\n└──────────┴────────────┴────────────┴────────────┴───┴────────┴──────────┴────────────┴───────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.5261338200070895,
+          "exact_match": null
+        },
+        {
+          "id": "q13",
+          "stdout": "shape: (3, 4)\n┌─────────┬─────────────────────────────────┬───────────────────────┬─────────────────┐\n│ country ┆ customers_with_completed_order… ┆ customers_with_events ┆ conversion_rate │\n│ ---     ┆ ---                             ┆ ---                   ┆ ---             │\n│ str     ┆ u32                             ┆ u32                   ┆ f64             │\n╞═════════╪═════════════════════════════════╪═══════════════════════╪═════════════════╡\n│ DE      ┆ 1                               ┆ 2                     ┆ 0.5             │\n│ FR      ┆ 2                               ┆ 3                     ┆ 0.666667        │\n│ US      ┆ 2                               ┆ 2                     ┆ 1.0             │\n└─────────┴─────────────────────────────────┴───────────────────────┴─────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.5586264110170305,
+          "exact_match": null
+        },
+        {
+          "id": "q14",
+          "stdout": "shape: (6, 4)\n┌─────────────┬────────────┬───────────┬──────────────────┐\n│ category    ┆ product_id ┆ net_sales ┆ rank_in_category │\n│ ---         ┆ ---        ┆ ---       ┆ ---              │\n│ str         ┆ i64        ┆ f64       ┆ u32              │\n╞═════════════╪════════════╪═══════════╪══════════════════╡\n│ Electronics ┆ 1001       ┆ 655.0     ┆ 1                │\n│ Electronics ┆ 1002       ┆ 323.0     ┆ 2                │\n│ Home        ┆ 1003       ┆ 705.0     ┆ 1                │\n│ Home        ┆ 1004       ┆ 565.0     ┆ 2                │\n│ Sports      ┆ 1005       ┆ 425.0     ┆ 1                │\n│ Sports      ┆ 1006       ┆ 420.0     ┆ 2                │\n└─────────────┴────────────┴───────────┴──────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.8100840790430084,
+          "exact_match": null
+        },
+        {
+          "id": "q15",
+          "stdout": "shape: (3, 4)\n┌─────────┬─────────────────────┬─────────────────────┬────────────────────────┐\n│ segment ┆ month               ┆ median_order_amount ┆ p90_payment_delay_days │\n│ ---     ┆ ---                 ┆ ---                 ┆ ---                    │\n│ str     ┆ datetime[μs]        ┆ f64                 ┆ f64                    │\n╞═════════╪═════════════════════╪═════════════════════╪════════════════════════╡\n│ A       ┆ 2024-06-01 00:00:00 ┆ 125.0               ┆ 5.0                    │\n│ B       ┆ 2024-06-01 00:00:00 ┆ 150.0               ┆ 6.0                    │\n│ C       ┆ 2024-06-01 00:00:00 ┆ 220.0               ┆ 7.0                    │\n└─────────┴─────────────────────┴─────────────────────┴────────────────────────┘\n",
+          "stderr": "",
+          "success": true,
+          "execution_duration_seconds": 0.5391809009597637,
+          "exact_match": null
+        }
+      ],
+      "generator_logs": "==========\n== CUDA ==\n==========\n\nCUDA Version 12.1.1\n\nContainer image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n\nThis container image and its contents are governed by the NVIDIA Deep Learning Container License.\nBy pulling and using the container, you accept the terms and conditions of this license:\nhttps://developer.nvidia.com/ngc/nvidia-deep-learning-container-license\n\nA copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.\n\nINFO:     172.17.0.1:45498 - \"GET /docs HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:45510 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:58574 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:58586 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:51284 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:51292 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:51306 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:39282 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:39284 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:53564 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:53576 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:53586 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:34488 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:34492 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:36804 - \"POST /chat HTTP/1.1\" 200 OK\nINFO:     172.17.0.1:36806 - \"POST /chat HTTP/1.1\" 200 OK\n\nCloning into '/app'...\nwarning: Requirements file `requirements.txt` does not contain any dependencies\nUsing Python 3.10.12 environment at: /usr\nChecked in 207ms\n/app/main.py:261: UserWarning: Field name \"schema\" in \"ChatRequest\" shadows an attribute in parent \"BaseModel\"\n  class ChatRequest(BaseModel):\nINFO:     Started server process [41]\nINFO:     Waiting for application startup.\nINFO:     Application startup complete.\nINFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)",
+      "executor_logs": ""
+    },
+    "rows": [
+      {
+        "id": "q01",
+        "question": "Count premium customers by country from customers.",
+        "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\n\nresult = (\n    customers\n    .filter(pl.col(\"is_premium\"))\n    .group_by(\"country\")\n    .agg(pl.len().alias(\"premium_customers\"))\n    .sort(\"premium_customers\", descending=True)\n)",
+        "generation_duration_seconds": 2.9048961619846523,
+        "peak_ram_mb": 39.0,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (3, 2)\n┌─────────┬───────────────────┐\n│ country ┆ premium_customers │\n│ ---     ┆ ---               │\n│ str     ┆ u32               │\n╞═════════╪═══════════════════╡\n│ FR      ┆ 2                 │\n│ US      ┆ 1                 │\n│ DE      ┆ 1                 │\n└─────────┴───────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 1.197107485961169,
+        "exact_match": null
+      },
+      {
+        "id": "q02",
+        "question": "Compute total revenue and average discount_amount for completed orders grouped by channel from orders.",
+        "code": "orders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\nresult = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .group_by(\"channel\")\n    .agg(\n        pl.col(\"amount\").sum().alias(\"total_revenue\"),\n        pl.col(\"discount_amount\").mean().alias(\"avg_discount_amount\"),\n    )\n)",
+        "generation_duration_seconds": 2.390910544025246,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (3, 3)\n┌─────────┬───────────────┬─────────────────────┐\n│ channel ┆ total_revenue ┆ avg_discount_amount │\n│ ---     ┆ ---           ┆ ---                 │\n│ str     ┆ f64           ┆ f64                 │\n╞═════════╪═══════════════╪═════════════════════╡\n│ store   ┆ 680.0         ┆ 21.666667           │\n│ web     ┆ 790.0         ┆ 15.0                │\n│ mobile  ┆ 860.0         ┆ 13.0                │\n└─────────┴───────────────┴─────────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.9411386730498634,
+        "exact_match": null
+      },
+      {
+        "id": "q03",
+        "question": "Find the top 10 brands by average base_price among active products from products.",
+        "code": "products = pl.read_csv(\"/app/data/products.csv\", try_parse_dates=True)\n\nresult = (\n    products\n    .filter(pl.col(\"is_active\"))\n    .group_by(\"brand\")\n    .agg(pl.col(\"base_price\").mean().alias(\"avg_base_price\"))\n    .sort(\"avg_base_price\", descending=True)\n    .head(10)\n)",
+        "generation_duration_seconds": 2.0760756310191937,
+        "peak_ram_mb": 39.0,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (3, 2)\n┌───────┬────────────────┐\n│ brand ┆ avg_base_price │\n│ ---   ┆ ---            │\n│ str   ┆ f64            │\n╞═══════╪════════════════╡\n│ Peak  ┆ 105.0          │\n│ Zen   ┆ 85.0           │\n│ Acme  ┆ 62.5           │\n└───────┴────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.8112137300195172,
+        "exact_match": null
+      },
+      {
+        "id": "q04",
+        "question": "Count events grouped by event_type and device from events.",
+        "code": "events = pl.read_csv(\"/app/data/events.csv\", try_parse_dates=True)\n\nresult = (\n    events\n    .group_by([\"event_type\", \"device\"])\n    .agg(pl.len().alias(\"event_count\"))\n)",
+        "generation_duration_seconds": 2.2022655499749817,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (8, 3)\n┌────────────┬────────┬─────────────┐\n│ event_type ┆ device ┆ event_count │\n│ ---        ┆ ---    ┆ ---         │\n│ str        ┆ str    ┆ u32         │\n╞════════════╪════════╪═════════════╡\n│ purchase   ┆ mobile ┆ 2           │\n│ view       ┆ web    ┆ 5           │\n│ view       ┆ mobile ┆ 6           │\n│ click      ┆ web    ┆ 4           │\n│ view       ┆ store  ┆ 1           │\n│ purchase   ┆ web    ┆ 2           │\n│ purchase   ┆ store  ┆ 1           │\n│ click      ┆ mobile ┆ 3           │\n└────────────┴────────┴─────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.5247810370055959,
+        "exact_match": null
+      },
+      {
+        "id": "q05",
+        "question": "Compute total quantity and gross sales per product_id from order_items where gross_sales = quantity * unit_price.",
+        "code": "order_items = pl.read_csv(\"/app/data/order_items.csv\", try_parse_dates=True)\n\nresult = (\n    order_items\n    .with_columns((pl.col(\"quantity\") * pl.col(\"unit_price\")).alias(\"gross_sales\"))\n    .group_by(\"product_id\")\n    .agg(\n        pl.col(\"quantity\").sum().alias(\"total_quantity\"),\n        pl.col(\"gross_sales\").sum().alias(\"gross_sales\"),\n    )\n)",
+        "generation_duration_seconds": 2.2286256580264308,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (6, 3)\n┌────────────┬────────────────┬─────────────┐\n│ product_id ┆ total_quantity ┆ gross_sales │\n│ ---        ┆ ---            ┆ ---         │\n│ i64        ┆ i64            ┆ f64         │\n╞════════════╪════════════════╪═════════════╡\n│ 1003       ┆ 5              ┆ 760.0       │\n│ 1006       ┆ 7              ┆ 425.0       │\n│ 1001       ┆ 6              ┆ 715.0       │\n│ 1002       ┆ 8              ┆ 350.0       │\n│ 1005       ┆ 5              ┆ 460.0       │\n│ 1004       ┆ 6              ┆ 580.0       │\n└────────────┴────────────────┴─────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.4628460160456598,
+        "exact_match": null
+      },
+      {
+        "id": "q06",
+        "question": "For each customer segment, compute completed order count, total revenue, and average order amount using customers and orders.",
+        "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\norders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\nresult = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .join(customers, on=\"customer_id\", how=\"inner\")\n    .group_by(\"segment\")\n    .agg(\n        pl.len().alias(\"completed_order_count\"),\n        pl.col(\"amount\").sum().alias(\"total_revenue\"),\n        pl.col(\"amount\").mean().alias(\"avg_order_amount\"),\n    )\n)",
+        "generation_duration_seconds": 2.217135282000527,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (3, 4)\n┌─────────┬───────────────────────┬───────────────┬──────────────────┐\n│ segment ┆ completed_order_count ┆ total_revenue ┆ avg_order_amount │\n│ ---     ┆ ---                   ┆ ---           ┆ ---              │\n│ str     ┆ u32                   ┆ f64           ┆ f64              │\n╞═════════╪═══════════════════════╪═══════════════╪══════════════════╡\n│ A       ┆ 4                     ┆ 650.0         ┆ 162.5            │\n│ C       ┆ 4                     ┆ 780.0         ┆ 195.0            │\n│ B       ┆ 5                     ┆ 900.0         ┆ 180.0            │\n└─────────┴───────────────────────┴───────────────┴──────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.5489067279850133,
+        "exact_match": null
+      },
+      {
+        "id": "q07",
+        "question": "Compute net sales by category using order_items and products where net_sales = quantity * unit_price - item_discount.",
+        "code": "order_items = pl.read_csv(\"/app/data/order_items.csv\", try_parse_dates=True)\nproducts = pl.read_csv(\"/app/data/products.csv\", try_parse_dates=True)\n\nresult = (\n    order_items\n    .join(products.select([\"product_id\", \"category\"]), on=\"product_id\", how=\"inner\")\n    .with_columns((pl.col(\"quantity\") * pl.col(\"unit_price\") - pl.col(\"item_discount\")).alias(\"net_sales\"))\n    .group_by(\"category\")\n    .agg(pl.col(\"net_sales\").sum().alias(\"net_sales\"))\n)",
+        "generation_duration_seconds": 2.249719451996498,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (3, 2)\n┌─────────────┬───────────┐\n│ category    ┆ net_sales │\n│ ---         ┆ ---       │\n│ str         ┆ f64       │\n╞═════════════╪═══════════╡\n│ Electronics ┆ 978.0     │\n│ Sports      ┆ 845.0     │\n│ Home        ┆ 1270.0    │\n└─────────────┴───────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.49893731699557975,
+        "exact_match": null
+      },
+      {
+        "id": "q08",
+        "question": "Compute average number of sessions per customer grouped by is_premium using customers and events.",
+        "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\nevents = pl.read_csv(\"/app/data/events.csv\", try_parse_dates=True)\n\nsessions_per_customer = (\n    events\n    .group_by(\"customer_id\")\n    .agg(pl.col(\"session_id\").n_unique().alias(\"session_count\"))\n)\n\nresult = (\n    customers\n    .join(sessions_per_customer, on=\"customer_id\", how=\"inner\")\n    .group_by(\"is_premium\")\n    .agg(pl.col(\"session_count\").mean().alias(\"avg_sessions_per_customer\"))\n)",
+        "generation_duration_seconds": 2.2304825979517773,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (2, 2)\n┌────────────┬───────────────────────────┐\n│ is_premium ┆ avg_sessions_per_customer │\n│ ---        ┆ ---                       │\n│ bool       ┆ f64                       │\n╞════════════╪═══════════════════════════╡\n│ true       ┆ 2.0                       │\n│ false      ┆ 1.75                      │\n└────────────┴───────────────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.48201630800031126,
+        "exact_match": null
+      },
+      {
+        "id": "q09",
+        "question": "Compute daily revenue for completed orders and a 7-day rolling average from orders.",
+        "code": "orders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\ndaily = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .with_columns(pl.col(\"order_date\").dt.date().alias(\"day\"))\n    .group_by(\"day\")\n    .agg(pl.col(\"amount\").sum().alias(\"daily_revenue\"))\n    .sort(\"day\")\n)\n\nresult = daily.with_columns(\n    pl.col(\"daily_revenue\").rolling_mean(window_size=7).alias(\"rolling_7d_avg_revenue\")\n)",
+        "generation_duration_seconds": 2.218513116997201,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (12, 3)\n┌────────────┬───────────────┬────────────────────────┐\n│ day        ┆ daily_revenue ┆ rolling_7d_avg_revenue │\n│ ---        ┆ ---           ┆ ---                    │\n│ date       ┆ f64           ┆ f64                    │\n╞════════════╪═══════════════╪════════════════════════╡\n│ 2024-06-01 ┆ 400.0         ┆ null                   │\n│ 2024-06-02 ┆ 220.0         ┆ null                   │\n│ 2024-06-03 ┆ 150.0         ┆ null                   │\n│ 2024-06-04 ┆ 90.0          ┆ null                   │\n│ 2024-06-05 ┆ 210.0         ┆ null                   │\n│ …          ┆ …             ┆ …                      │\n│ 2024-06-09 ┆ 140.0         ┆ 158.571429             │\n│ 2024-06-10 ┆ 160.0         ┆ 150.0                  │\n│ 2024-06-11 ┆ 180.0         ┆ 154.285714             │\n│ 2024-06-12 ┆ 230.0         ┆ 174.285714             │\n│ 2024-06-13 ┆ 250.0         ┆ 180.0                  │\n└────────────┴───────────────┴────────────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.5868889020057395,
+        "exact_match": null
+      },
+      {
+        "id": "q10",
+        "question": "Find top 20 customers by lifetime_value with at least 5 completed orders using customers and orders.",
+        "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\norders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\nqualified = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .group_by(\"customer_id\")\n    .agg(pl.len().alias(\"completed_order_count\"))\n    .filter(pl.col(\"completed_order_count\") >= 5)\n)\n\nresult = (\n    qualified\n    .join(customers.select([\"customer_id\", \"lifetime_value\"]), on=\"customer_id\", how=\"inner\")\n    .sort(\"lifetime_value\", descending=True)\n    .head(20)\n)",
+        "generation_duration_seconds": 2.1946047300007194,
+        "peak_ram_mb": 39.0,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (1, 3)\n┌─────────────┬───────────────────────┬────────────────┐\n│ customer_id ┆ completed_order_count ┆ lifetime_value │\n│ ---         ┆ ---                   ┆ ---            │\n│ i64         ┆ u32                   ┆ f64            │\n╞═════════════╪═══════════════════════╪════════════════╡\n│ 5           ┆ 5                     ┆ 990.0          │\n└─────────────┴───────────────────────┴────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.496948332991451,
+        "exact_match": null
+      },
+      {
+        "id": "q11",
+        "question": "Compute brand share of quantity sold within each category using products and order_items.",
+        "code": "products = pl.read_csv(\"/app/data/products.csv\", try_parse_dates=True)\norder_items = pl.read_csv(\"/app/data/order_items.csv\", try_parse_dates=True)\n\nbrand_qty = (\n    order_items\n    .join(products.select([\"product_id\", \"category\", \"brand\"]), on=\"product_id\", how=\"inner\")\n    .group_by([\"category\", \"brand\"])\n    .agg(pl.col(\"quantity\").sum().alias(\"brand_quantity\"))\n)\n\ncategory_qty = (\n    brand_qty\n    .group_by(\"category\")\n    .agg(pl.col(\"brand_quantity\").sum().alias(\"category_quantity\"))\n)\n\nresult = (\n    brand_qty\n    .join(category_qty, on=\"category\", how=\"inner\")\n    .with_columns(\n        (pl.col(\"brand_quantity\") / pl.col(\"category_quantity\")).alias(\"brand_share\")\n    )\n)",
+        "generation_duration_seconds": 2.255523562023882,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (4, 5)\n┌─────────────┬───────┬────────────────┬───────────────────┬─────────────┐\n│ category    ┆ brand ┆ brand_quantity ┆ category_quantity ┆ brand_share │\n│ ---         ┆ ---   ┆ ---            ┆ ---               ┆ ---         │\n│ str         ┆ str   ┆ i64            ┆ i64               ┆ f64         │\n╞═════════════╪═══════╪════════════════╪═══════════════════╪═════════════╡\n│ Sports      ┆ Peak  ┆ 12             ┆ 12                ┆ 1.0         │\n│ Electronics ┆ Acme  ┆ 14             ┆ 14                ┆ 1.0         │\n│ Home        ┆ Zen   ┆ 5              ┆ 11                ┆ 0.454545    │\n│ Home        ┆ Luma  ┆ 6              ┆ 11                ┆ 0.545455    │\n└─────────────┴───────┴────────────────┴───────────────────┴─────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.515066213964019,
+        "exact_match": null
+      },
+      {
+        "id": "q12",
+        "question": "Compute time difference in seconds between consecutive events per customer from events.",
+        "code": "events = pl.read_csv(\"/app/data/events.csv\", try_parse_dates=True)\n\nresult = (\n    events\n    .sort([\"customer_id\", \"event_time\"])\n    .with_columns(\n        (\n            pl.col(\"event_time\").cast(pl.Int64).diff().over(\"customer_id\") / 1_000_000\n        ).alias(\"seconds_since_previous_event\")\n    )\n)",
+        "generation_duration_seconds": 2.1137421400053427,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (24, 10)\n┌──────────┬────────────┬────────────┬────────────┬───┬────────┬──────────┬────────────┬───────────┐\n│ event_id ┆ customer_i ┆ session_id ┆ event_time ┆ … ┆ source ┆ page     ┆ duration_s ┆ seconds_s │\n│ ---      ┆ d          ┆ ---        ┆ ---        ┆   ┆ ---    ┆ ---      ┆ ec         ┆ ince_prev │\n│ i64      ┆ ---        ┆ str        ┆ datetime[μ ┆   ┆ str    ┆ str      ┆ ---        ┆ ious_even │\n│          ┆ i64        ┆            ┆ s]         ┆   ┆        ┆          ┆ f64        ┆ t         │\n│          ┆            ┆            ┆            ┆   ┆        ┆          ┆            ┆ ---       │\n│          ┆            ┆            ┆            ┆   ┆        ┆          ┆            ┆ f64       │\n╞══════════╪════════════╪════════════╪════════════╪═══╪════════╪══════════╪════════════╪═══════════╡\n│ 201      ┆ 1          ┆ s1         ┆ 2024-06-01 ┆ … ┆ ads    ┆ home     ┆ 30.0       ┆ null      │\n│          ┆            ┆            ┆ 10:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 202      ┆ 1          ┆ s1         ┆ 2024-06-01 ┆ … ┆ ads    ┆ product  ┆ 15.0       ┆ 300.0     │\n│          ┆            ┆            ┆ 10:05:00   ┆   ┆        ┆          ┆            ┆           │\n│ 203      ┆ 1          ┆ s2         ┆ 2024-06-02 ┆ … ┆ email  ┆ checkout ┆ 60.0       ┆ 82500.0   │\n│          ┆            ┆            ┆ 09:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 204      ┆ 2          ┆ s3         ┆ 2024-06-02 ┆ … ┆ seo    ┆ home     ┆ 25.0       ┆ null      │\n│          ┆            ┆            ┆ 08:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 205      ┆ 2          ┆ s3         ┆ 2024-06-02 ┆ … ┆ seo    ┆ product  ┆ 10.0       ┆ 420.0     │\n│          ┆            ┆            ┆ 08:07:00   ┆   ┆        ┆          ┆            ┆           │\n│ …        ┆ …          ┆ …          ┆ …          ┆ … ┆ …      ┆ …        ┆ …          ┆ …         │\n│ 220      ┆ 7          ┆ s12        ┆ 2024-06-12 ┆ … ┆ seo    ┆ product  ┆ 11.0       ┆ 1500.0    │\n│          ┆            ┆            ┆ 09:25:00   ┆   ┆        ┆          ┆            ┆           │\n│ 221      ┆ 8          ┆ s13        ┆ 2024-06-09 ┆ … ┆ ads    ┆ home     ┆ 23.0       ┆ null      │\n│          ┆            ┆            ┆ 12:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 222      ┆ 8          ┆ s13        ┆ 2024-06-09 ┆ … ┆ ads    ┆ product  ┆ 9.0        ┆ 300.0     │\n│          ┆            ┆            ┆ 12:05:00   ┆   ┆        ┆          ┆            ┆           │\n│ 223      ┆ 8          ┆ s14        ┆ 2024-06-10 ┆ … ┆ seo    ┆ home     ┆ 24.0       ┆ 89700.0   │\n│          ┆            ┆            ┆ 13:00:00   ┆   ┆        ┆          ┆            ┆           │\n│ 224      ┆ 8          ┆ s15        ┆ 2024-06-13 ┆ … ┆ email  ┆ checkout ┆ 72.0       ┆ 262800.0  │\n│          ┆            ┆            ┆ 14:00:00   ┆   ┆        ┆          ┆            ┆           │\n└──────────┴────────────┴────────────┴────────────┴───┴────────┴──────────┴────────────┴───────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.5261338200070895,
+        "exact_match": null
+      },
+      {
+        "id": "q13",
+        "question": "Compute conversion rate per country as customers with completed orders divided by customers with events using customers, orders, and events.",
+        "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\norders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\nevents = pl.read_csv(\"/app/data/events.csv\", try_parse_dates=True)\n\ncustomers_with_orders = (\n    orders\n    .filter(pl.col(\"status\") == \"completed\")\n    .select(\"customer_id\")\n    .unique()\n    .join(customers.select([\"customer_id\", \"country\"]), on=\"customer_id\", how=\"inner\")\n    .group_by(\"country\")\n    .agg(pl.len().alias(\"customers_with_completed_orders\"))\n)\n\ncustomers_with_events = (\n    events\n    .select(\"customer_id\")\n    .unique()\n    .join(customers.select([\"customer_id\", \"country\"]), on=\"customer_id\", how=\"inner\")\n    .group_by(\"country\")\n    .agg(pl.len().alias(\"customers_with_events\"))\n)\n\nresult = (\n    customers_with_orders\n    .join(customers_with_events, on=\"country\", how=\"inner\")\n    .with_columns(\n        (\n            pl.col(\"customers_with_completed_orders\") / pl.col(\"customers_with_events\")\n        ).alias(\"conversion_rate\")\n    )\n)",
+        "generation_duration_seconds": 2.1840771160204895,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (3, 4)\n┌─────────┬─────────────────────────────────┬───────────────────────┬─────────────────┐\n│ country ┆ customers_with_completed_order… ┆ customers_with_events ┆ conversion_rate │\n│ ---     ┆ ---                             ┆ ---                   ┆ ---             │\n│ str     ┆ u32                             ┆ u32                   ┆ f64             │\n╞═════════╪═════════════════════════════════╪═══════════════════════╪═════════════════╡\n│ DE      ┆ 1                               ┆ 2                     ┆ 0.5             │\n│ FR      ┆ 2                               ┆ 3                     ┆ 0.666667        │\n│ US      ┆ 2                               ┆ 2                     ┆ 1.0             │\n└─────────┴─────────────────────────────────┴───────────────────────┴─────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.5586264110170305,
+        "exact_match": null
+      },
+      {
+        "id": "q14",
+        "question": "Find top 3 products by net sales within each category using products and order_items.",
+        "code": "products = pl.read_csv(\"/app/data/products.csv\", try_parse_dates=True)\norder_items = pl.read_csv(\"/app/data/order_items.csv\", try_parse_dates=True)\n\nsales = (\n    order_items\n    .join(products.select([\"product_id\", \"category\"]), on=\"product_id\", how=\"inner\")\n    .with_columns((pl.col(\"quantity\") * pl.col(\"unit_price\") - pl.col(\"item_discount\")).alias(\"net_sales\"))\n    .group_by([\"category\", \"product_id\"])\n    .agg(pl.col(\"net_sales\").sum().alias(\"net_sales\"))\n)\n\nresult = (\n    sales\n    .with_columns(\n        pl.col(\"net_sales\").rank(\"dense\", descending=True).over(\"category\").alias(\"rank_in_category\")\n    )\n    .filter(pl.col(\"rank_in_category\") <= 3)\n    .sort([\"category\", \"rank_in_category\", \"product_id\"])\n)",
+        "generation_duration_seconds": 2.1976258319918998,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (6, 4)\n┌─────────────┬────────────┬───────────┬──────────────────┐\n│ category    ┆ product_id ┆ net_sales ┆ rank_in_category │\n│ ---         ┆ ---        ┆ ---       ┆ ---              │\n│ str         ┆ i64        ┆ f64       ┆ u32              │\n╞═════════════╪════════════╪═══════════╪══════════════════╡\n│ Electronics ┆ 1001       ┆ 655.0     ┆ 1                │\n│ Electronics ┆ 1002       ┆ 323.0     ┆ 2                │\n│ Home        ┆ 1003       ┆ 705.0     ┆ 1                │\n│ Home        ┆ 1004       ┆ 565.0     ┆ 2                │\n│ Sports      ┆ 1005       ┆ 425.0     ┆ 1                │\n│ Sports      ┆ 1006       ┆ 420.0     ┆ 2                │\n└─────────────┴────────────┴───────────┴──────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.8100840790430084,
+        "exact_match": null
+      },
+      {
+        "id": "q15",
+        "question": "Compute median order amount and 90th percentile payment_delay_days per segment and month using customers and orders.",
+        "code": "customers = pl.read_csv(\"/app/data/customers.csv\", try_parse_dates=True)\norders = pl.read_csv(\"/app/data/orders.csv\", try_parse_dates=True)\n\nresult = (\n    orders\n    .join(customers.select([\"customer_id\", \"segment\"]), on=\"customer_id\", how=\"inner\")\n    .with_columns(pl.col(\"order_date\").dt.truncate(\"1mo\").alias(\"month\"))\n    .group_by([\"segment\", \"month\"])\n    .agg(\n        pl.col(\"amount\").median().alias(\"median_order_amount\"),\n        pl.col(\"payment_delay_days\").quantile(0.9).alias(\"p90_payment_delay_days\"),\n    )\n)",
+        "generation_duration_seconds": 2.171465619991068,
+        "peak_ram_mb": 38.99,
+        "peak_gpu_mb": 0.0,
+        "stdout": "shape: (3, 4)\n┌─────────┬─────────────────────┬─────────────────────┬────────────────────────┐\n│ segment ┆ month               ┆ median_order_amount ┆ p90_payment_delay_days │\n│ ---     ┆ ---                 ┆ ---                 ┆ ---                    │\n│ str     ┆ datetime[μs]        ┆ f64                 ┆ f64                    │\n╞═════════╪═════════════════════╪═════════════════════╪════════════════════════╡\n│ A       ┆ 2024-06-01 00:00:00 ┆ 125.0               ┆ 5.0                    │\n│ B       ┆ 2024-06-01 00:00:00 ┆ 150.0               ┆ 6.0                    │\n│ C       ┆ 2024-06-01 00:00:00 ┆ 220.0               ┆ 7.0                    │\n└─────────┴─────────────────────┴─────────────────────┴────────────────────────┘\n",
+        "stderr": "",
+        "success": true,
+        "execution_duration_seconds": 0.5391809009597637,
+        "exact_match": null
+      }
+    ]
+  },
+  {
     "run_id": "1c985fe2-026e-4e4e-9269-41c2f09ffcb6",
     "created_at": "2026-03-17 03:22:17",
     "mode": "provider",
