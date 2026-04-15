@@ -323,7 +323,7 @@ def start_submission_server(repo_dir: Path, env_dir: Path, port: int):
     return process, f"http://127.0.0.1:{port}", log_path
 
 
-def wait_until_up(process: subprocess.Popen, url: str, log_path: Path, timeout: float = 15.0) -> None:
+def wait_until_up(process: subprocess.Popen, url: str, log_path: Path, timeout: float = 3600.0) -> None:
     deadline = time.time() + timeout
 
     while time.time() < deadline:
