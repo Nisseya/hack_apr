@@ -223,11 +223,10 @@ def ensure_cached_env(repo_dir: Path) -> Path:
 
     result = subprocess.run(
         [
-            str(BASE_PYTHON),
-            "-m",
-            "venv",
-            "--system-site-packages",
-            str(env_dir),
+        str(BASE_PYTHON),
+        "-m",
+        "venv",
+        str(env_dir),
         ],
         capture_output=True,
         text=True,
