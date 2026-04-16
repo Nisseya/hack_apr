@@ -153,6 +153,16 @@ def dependency_fingerprint(repo_dir: Path) -> str:
 
     hasher = hashlib.sha256()
 
+    hasher.update(
+        subprocess.check_output([str(BASE_PYTHON), "--version"], env=uv_env())
+    )
+    hasher.update(
+        subprocess.check_output(
+            ["uv", "pip", "freeze", "--python", str(BASE_PYTHON)],
+            env=uv_env(),
+        )
+    )
+
     if requirements.exists():
         hasher.update(b"requirements.txt\n")
         hasher.update(requirements.read_bytes())
@@ -165,8 +175,101 @@ def dependency_fingerprint(repo_dir: Path) -> str:
         hasher.update(b"uv.lock\n")
         hasher.update(lock.read_bytes())
 
-    digest = hasher.hexdigest()
-    return digest if digest else "no_deps"
+    return hasher.hexdigest()
+
+
+def ensure_cached_env(repo_dir: Path) -> Path:
+    ensure_base_env()
+
+    env_dir = CACHE_VENVS_ROOT / dependency_fingerprint(repo_dir)
+    python_path = env_dir / "bin" / "python"
+
+    if python_path.exists():
+        return env_dir
+
+    result = subprocess.run(
+        [
+            str(BASE_PYTHON),
+            "-m",
+            "venv",
+            str(env_dir),
+        ],
+        capture_output=True,
+        text=True,
+        env=uv_env(),
+    )
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=result.stderr.strip() or result.stdout.strip(),
+        )
+
+    requirements = repo_dir / "requirements.txt"
+    pyproject = repo_dir / "pyproject.toml"
+    lock = repo_dir / "uv.lock"
+
+    if requirements.exists():
+        result = subprocess.run(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(python_path),
+                "-r",
+                str(requirements),
+            ],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            env=uv_env(),
+        )
+        if result.returncode != 0:
+            shutil.rmtree(env_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=500,
+                detail=result.stderr.strip() or result.stdout.strip(),
+            )
+    elif pyproject.exists():
+        env = uv_env()
+        env["UV_PROJECT_ENVIRONMENT"] = str(env_dir)
+
+        cmd = ["uv", "sync"]
+        if lock.exists():
+            cmd.append("--frozen")
+
+        result = subprocess.run(
+            cmd,
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        if result.returncode != 0:
+            shutil.rmtree(env_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=500,
+                detail=result.stderr.strip() or result.stdout.strip(),
+            )
+
+    result = subprocess.run(
+        [
+            str(python_path),
+            "-c",
+            "from transformers.models.qwen2.modeling_qwen2 import Qwen2ForCausalLM; print('ok')",
+        ],
+        capture_output=True,
+        text=True,
+        env=uv_env(),
+    )
+    if result.returncode != 0:
+        shutil.rmtree(env_dir, ignore_errors=True)
+        raise HTTPException(
+            status_code=500,
+            detail=result.stderr.strip() or result.stdout.strip(),
+        )
+
+    return env_dir
 
 
 def ensure_base_env() -> None:
@@ -210,85 +313,6 @@ def ensure_base_env() -> None:
             status_code=500,
             detail=result.stderr.strip() or result.stdout.strip(),
         )
-
-
-def ensure_cached_env(repo_dir: Path) -> Path:
-    ensure_base_env()
-
-    env_dir = CACHE_VENVS_ROOT / dependency_fingerprint(repo_dir)
-    python_path = env_dir / "bin" / "python"
-
-    if python_path.exists():
-        return env_dir
-
-    result = subprocess.run(
-        [
-        str(BASE_PYTHON),
-        "-m",
-        "venv",
-        str(env_dir),
-        ],
-        capture_output=True,
-        text=True,
-        env=uv_env(),
-    )
-    if result.returncode != 0:
-        raise HTTPException(
-            status_code=500,
-            detail=result.stderr.strip() or result.stdout.strip(),
-        )
-
-    requirements = repo_dir / "requirements.txt"
-    pyproject = repo_dir / "pyproject.toml"
-    lock = repo_dir / "uv.lock"
-
-    if requirements.exists():
-        result = subprocess.run(
-            [
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                str(python_path),
-                "-r",
-                str(requirements),
-            ],
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-            env=uv_env(),
-        )
-        if result.returncode != 0:
-            shutil.rmtree(env_dir, ignore_errors=True)
-            raise HTTPException(
-                status_code=500,
-                detail=result.stderr.strip() or result.stdout.strip(),
-            )
-        return env_dir
-
-    if pyproject.exists():
-        env = uv_env()
-        env["UV_PROJECT_ENVIRONMENT"] = str(env_dir)
-
-        cmd = ["uv", "sync"]
-        if lock.exists():
-            cmd.append("--frozen")
-
-        result = subprocess.run(
-            cmd,
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-        if result.returncode != 0:
-            shutil.rmtree(env_dir, ignore_errors=True)
-            raise HTTPException(
-                status_code=500,
-                detail=result.stderr.strip() or result.stdout.strip(),
-            )
-
-    return env_dir
 
 
 def install_repo_dependencies(repo_dir: Path) -> Path:
