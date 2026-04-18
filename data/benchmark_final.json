@@ -465,7 +465,7 @@
           "format": "parquet"
         },
         "tpch_supplier": {
-          "file_name": "data/tpch_supplier.parquet",
+          "file_name": "data/tpch_supplier.p  arquet",
           "format": "parquet"
         },
         "tpch_nation": {
