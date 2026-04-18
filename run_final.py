@@ -107,7 +107,7 @@ def start_server(repo_dir, port):
 
     url = f"http://127.0.0.1:{port}"
 
-    for _ in range(300):
+    for _ in range(3000):
         if p.poll() is not None:
             raise RuntimeError(log.read_text())
         try:
