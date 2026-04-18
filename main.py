@@ -644,57 +644,132 @@ def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
 
 @app.post(
     "/submit_final",
-    response_model=SubmitFinalResponse,
     responses={
         403: {"model": ErrorResponse},
         409: {"model": BusyResponse},
     },
 )
-def submit_final(payload: SubmitFinalRequest) -> SubmitFinalResponse:
+async def submit_final(payload: SubmitFinalRequest):
     if payload.secret != SUBMIT_FINAL_SECRET:
         raise HTTPException(status_code=403, detail="Forbidden")
-
+ 
     lock_file = acquire_benchmark_lock()
     if lock_file is None:
         raise HTTPException(status_code=409, detail="A benchmark is already running")
-
-    repo_dir = None
-    env_dir = None
-    process = None
-
-    try:
-        repo_dir = clone_repo(payload.repo_url)
-        env_dir = install_repo_dependencies(repo_dir)
-
-        port = get_free_port()
-        process, base_url, _ = start_submission_server(repo_dir, env_dir, port, quiet=True)
-        wait_until_up(process, f"{base_url}/", None)
-
-        generated_answers = generate_answers_from_repo(process.pid, base_url, final_questions)
-        executed_answers, _ = execute_answers(generated_answers, final_questions)
-        score = compute_submit_final_score(generated_answers, executed_answers)
-
-        return SubmitFinalResponse(score=score)
-
-    except HTTPException as exc:
-        if exc.status_code in {403, 409}:
-            raise
-        raise HTTPException(status_code=500, detail="Submission failed")
-    except Exception:
-        raise HTTPException(status_code=500, detail="Submission failed")
-    finally:
-        if process is not None:
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-
-        if repo_dir is not None:
-            shutil.rmtree(repo_dir, ignore_errors=True)
-
-        lock_file.close()
-
+ 
+    total = len(final_questions)
+ 
+    async def event_generator():
+        repo_dir = None
+        env_dir = None
+        process = None
+ 
+        try:
+            yield sse_event(
+                "status",
+                {"step": "cloning", "message": "Cloning repository"},
+            )
+            repo_dir = clone_repo(payload.repo_url)
+ 
+            yield sse_event(
+                "status",
+                {"step": "preparing_env", "message": "Preparing environment"},
+            )
+            env_dir = install_repo_dependencies(repo_dir)
+ 
+            port = get_free_port()
+            yield sse_event(
+                "status",
+                {"step": "starting_server", "message": "Starting server"},
+            )
+            process, base_url, _ = start_submission_server(
+                repo_dir, env_dir, port, quiet=True
+            )
+            wait_until_up(process, f"{base_url}/", None)
+ 
+            yield sse_event(
+                "status",
+                {"step": "server_ready", "message": "Submission server is ready"},
+            )
+ 
+            generated_answers: list[GeneratedAnswer] = []
+            executed_answers: list[ExecutedAnswer] = []
+ 
+            for index, question in enumerate(final_questions, start=1):
+                # Notify progress WITHOUT revealing question id/text
+                yield sse_event(
+                    "progress",
+                    {
+                        "step": "question_started",
+                        "index": index,
+                        "total": total,
+                    },
+                )
+ 
+                generated_answer, executed_answer = run_single_question(
+                    process, base_url, question
+                )
+                generated_answers.append(generated_answer)
+                executed_answers.append(executed_answer)
+ 
+                # Notify completion of this question - ONLY aggregated signal,
+                # no question id, no generated code, no stdout/stderr.
+                yield sse_event(
+                    "progress",
+                    {
+                        "step": "question_done",
+                        "index": index,
+                        "total": total,
+                        "correct_so_far": sum(
+                            1
+                            for a in executed_answers
+                            if a.success and a.exact_match
+                        ),
+                    },
+                )
+ 
+                await asyncio.sleep(0)
+ 
+            score = compute_submit_final_score(generated_answers, executed_answers)
+ 
+            yield sse_event(
+                "done",
+                {"success": True, "score": score},
+            )
+ 
+        except HTTPException as exc:
+            yield sse_event(
+                "error",
+                {"message": exc.detail if exc.status_code == 403 else "Submission failed"},
+            )
+        except Exception:
+            yield sse_event(
+                "error",
+                {"message": "Submission failed"},
+            )
+        finally:
+            if process is not None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+ 
+            if repo_dir is not None:
+                shutil.rmtree(repo_dir, ignore_errors=True)
+ 
+            lock_file.close()
+ 
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+ 
 
 @app.post(
     "/run-repo-stream",
