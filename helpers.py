@@ -1,7 +1,5 @@
-import hashlib
 import json
 import os
-import re
 import subprocess
 import tempfile
 import threading
@@ -26,22 +24,71 @@ class ExecutionMetrics(BaseModel):
     duration_seconds: float
 
 
-def _get_pid_ram_mb(pid: int) -> float:
+def _get_descendant_pids(pid: int) -> set[int]:
     result = subprocess.run(
-        ["ps", "-o", "rss=", "-p", str(pid)],
+        ["ps", "-e", "-o", "pid=,ppid="],
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    if result.returncode != 0:
+        return {pid}
+
+    children: dict[int, list[int]] = {}
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) != 2:
+            continue
+        try:
+            child_pid = int(parts[0])
+            parent_pid = int(parts[1])
+        except ValueError:
+            continue
+        children.setdefault(parent_pid, []).append(child_pid)
+
+    all_pids = {pid}
+    stack = [pid]
+
+    while stack:
+        current = stack.pop()
+        for child in children.get(current, []):
+            if child not in all_pids:
+                all_pids.add(child)
+                stack.append(child)
+
+    return all_pids
+
+
+def _get_tree_ram_mb(pid: int) -> float:
+    pids = _get_descendant_pids(pid)
+    result = subprocess.run(
+        ["ps", "-e", "-o", "pid=,rss="],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
         return 0.0
-    return int(result.stdout.strip()) / 1024
+
+    total_kb = 0
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) != 2:
+            continue
+        try:
+            line_pid = int(parts[0])
+            rss_kb = int(parts[1])
+        except ValueError:
+            continue
+        if line_pid in pids:
+            total_kb += rss_kb
+
+    return total_kb / 1024
 
 
-def _get_pid_gpu_mb(pid: int) -> float:
+def _get_total_gpu_mb() -> float:
     result = subprocess.run(
         [
             "nvidia-smi",
-            "--query-compute-apps=pid,used_gpu_memory",
+            "--query-gpu=memory.used",
             "--format=csv,noheader,nounits",
         ],
         capture_output=True,
@@ -52,16 +99,13 @@ def _get_pid_gpu_mb(pid: int) -> float:
 
     total = 0.0
     for line in result.stdout.splitlines():
-        parts = [part.strip() for part in line.split(",")]
-        if len(parts) != 2:
+        line = line.strip()
+        if not line:
             continue
         try:
-            line_pid = int(parts[0])
-            used_mb = float(parts[1])
+            total += float(line)
         except ValueError:
             continue
-        if line_pid == pid:
-            total += used_mb
     return total
 
 
@@ -95,15 +139,15 @@ def get_code(
     peak_gpu_mb = 0.0
 
     while thread.is_alive():
-        peak_ram_mb = max(peak_ram_mb, _get_pid_ram_mb(pid))
-        peak_gpu_mb = max(peak_gpu_mb, _get_pid_gpu_mb(pid))
+        peak_ram_mb = max(peak_ram_mb, _get_tree_ram_mb(pid))
+        peak_gpu_mb = max(peak_gpu_mb, _get_total_gpu_mb())
         time.sleep(sample_interval)
 
     thread.join()
 
     duration_seconds = time.perf_counter() - start
-    peak_ram_mb = max(peak_ram_mb, _get_pid_ram_mb(pid))
-    peak_gpu_mb = max(peak_gpu_mb, _get_pid_gpu_mb(pid))
+    peak_ram_mb = max(peak_ram_mb, _get_tree_ram_mb(pid))
+    peak_gpu_mb = max(peak_gpu_mb, _get_total_gpu_mb())
 
     if "exception" in error:
         raise error["exception"]
