@@ -271,59 +271,87 @@ def assert_repo_dependencies_allowed(repo_dir: Path) -> None:
     assert_requirements_allowed(repo_dir)
     assert_pyproject_allowed(repo_dir)
 
+def normalize_package_name(name: str) -> str:
+    return name.strip().lower().replace("_", "-").replace(".", "-")
+
+
+def requirement_name(line: str) -> str | None:
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return None
+    if line.startswith(("-", "git+", "http://", "https://")):
+        return None
+
+    for sep in ("==", ">=", "<=", "~=", "!=", ">", "<", "[", ";"):
+        if sep in line:
+            line = line.split(sep, 1)[0]
+            break
+
+    line = line.strip()
+    return normalize_package_name(line) if line else None
+
+
+def filtered_requirements_lines(repo_dir: Path) -> list[str]:
+    requirements = repo_dir / "requirements.txt"
+    if not requirements.exists():
+        return []
+
+    kept = []
+    for raw_line in requirements.read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = raw_line.strip()
+        name = requirement_name(raw_line)
+
+        if name and name in PROTECTED_PACKAGES:
+            continue
+
+        if stripped:
+            kept.append(raw_line)
+
+    return kept
 
 def install_repo_dependencies(repo_dir: Path) -> Path:
     ensure_base_env()
-    assert_repo_dependencies_allowed(repo_dir)
 
     requirements = repo_dir / "requirements.txt"
     pyproject = repo_dir / "pyproject.toml"
-    lock = repo_dir / "uv.lock"
 
     if requirements.exists():
-        result = subprocess.run(
-            [
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                str(BASE_PYTHON),
-                "-r",
-                str(requirements),
-            ],
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-            env=uv_env(),
-        )
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=result.stderr.strip() or result.stdout.strip(),
+        lines = filtered_requirements_lines(repo_dir)
+
+        if lines:
+            filtered_path = repo_dir / ".filtered_requirements.txt"
+            filtered_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "uv",
+                    "pip",
+                    "install",
+                    "--python",
+                    str(BASE_PYTHON),
+                    "-r",
+                    str(filtered_path),
+                ],
+                cwd=repo_dir,
+                capture_output=True,
+                text=True,
+                env=uv_env(),
             )
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=result.stderr.strip() or result.stdout.strip(),
+                )
+
         return BASE_VENV
 
     if pyproject.exists():
-        env = uv_env()
-        env["UV_PROJECT_ENVIRONMENT"] = str(BASE_VENV)
-        cmd = ["uv", "sync"]
-        if lock.exists():
-            cmd.append("--frozen")
-        result = subprocess.run(
-            cmd,
-            cwd=repo_dir,
-            capture_output=True,
-            text=True,
-            env=env,
+        raise HTTPException(
+            status_code=400,
+            detail="pyproject.toml is not supported in this mode, use requirements.txt",
         )
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=result.stderr.strip() or result.stdout.strip(),
-            )
 
     return BASE_VENV
-
 
 def start_submission_server(repo_dir: Path, env_dir: Path, port: int, quiet: bool = False):
     log_path = None if quiet else repo_dir / "server.log"
