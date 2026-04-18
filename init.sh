@@ -15,6 +15,7 @@ WORKSPACE_TMP="/workspace/tmp"
 WORKSPACE_HF="/workspace/hf"
 WORKSPACE_UV_CACHE="/workspace/uv_cache"
 WORKSPACE_VENVS="/workspace/venvs"
+WORKSPACE_UV_PYTHON="/workspace/uv_python"
 
 if [ -z "$TEAM_PASSWORD" ]; then
   echo "Usage: sudo bash init.sh <team_password>"
@@ -45,6 +46,10 @@ fi
 
 echo "${TEAM_USER}:${TEAM_PASSWORD}" | chpasswd
 
+mkdir -p "/home/${APP_USER}"
+chown -R "${APP_USER}:${APP_GROUP}" "/home/${APP_USER}"
+chmod 755 "/home/${APP_USER}"
+
 apt-get update
 apt-get install -y curl ca-certificates
 
@@ -60,27 +65,41 @@ mkdir -p "$LOG_DIR"
 chown -R "$APP_USER:$APP_GROUP" "$LOG_DIR"
 chmod 750 "$LOG_DIR"
 
-mkdir -p "$WORKSPACE_TMP" "$WORKSPACE_HF" "$WORKSPACE_UV_CACHE" "$WORKSPACE_VENVS"
-chmod 777 "$WORKSPACE_TMP" "$WORKSPACE_HF" "$WORKSPACE_UV_CACHE" "$WORKSPACE_VENVS"
+mkdir -p \
+  "$WORKSPACE_TMP" \
+  "$WORKSPACE_HF" \
+  "$WORKSPACE_UV_CACHE" \
+  "$WORKSPACE_VENVS" \
+  "$WORKSPACE_UV_PYTHON"
+
+chmod 777 \
+  "$WORKSPACE_TMP" \
+  "$WORKSPACE_HF" \
+  "$WORKSPACE_UV_CACHE" \
+  "$WORKSPACE_VENVS" \
+  "$WORKSPACE_UV_PYTHON"
 
 chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
 chmod 700 "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 700 {} \;
 find "$APP_DIR" -type f -exec chmod 600 {} \;
 
-su -s /bin/bash "$APP_USER" -c "
-  export HOME=/home/${APP_USER}
-  export PATH=/usr/local/bin:/home/${APP_USER}/.local/bin:\$PATH
-  export TMPDIR=${WORKSPACE_TMP}
-  export HF_HOME=${WORKSPACE_HF}
-  export UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
-  export UV_LINK_MODE=copy
-  export VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
-  export UV_MANAGED_PYTHON=1
-  uv python install 3.12
-  cd ${APP_DIR}
-  uv sync --python 3.12
-"
+if [ -f "$APP_DIR/pyproject.toml" ]; then
+  su -s /bin/bash "$APP_USER" -c "
+    export HOME=/home/${APP_USER}
+    export PATH=/usr/local/bin:/home/${APP_USER}/.local/bin:\$PATH
+    export TMPDIR=${WORKSPACE_TMP}
+    export HF_HOME=${WORKSPACE_HF}
+    export UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
+    export UV_LINK_MODE=copy
+    export VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
+    export UV_PYTHON_INSTALL_DIR=${WORKSPACE_UV_PYTHON}
+    export UV_MANAGED_PYTHON=1
+    cd ${APP_DIR}
+    uv python install 3.12
+    uv sync --python 3.12
+  "
+fi
 
 cat >/etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
@@ -98,6 +117,7 @@ Environment=HF_HOME=${WORKSPACE_HF}
 Environment=UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
 Environment=UV_LINK_MODE=copy
 Environment=VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
+Environment=UV_PYTHON_INSTALL_DIR=${WORKSPACE_UV_PYTHON}
 Environment=UV_MANAGED_PYTHON=1
 Environment=SUBMIT_FINAL_SECRET=change-me
 ExecStart=/usr/local/bin/uv run --python 3.12 uvicorn main:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive 3600
@@ -131,6 +151,7 @@ Runtime:
   ${WORKSPACE_HF}
   ${WORKSPACE_UV_CACHE}
   ${WORKSPACE_VENVS}
+  ${WORKSPACE_UV_PYTHON}
 
 Python:
   uv-managed Python 3.12
