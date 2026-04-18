@@ -44,33 +44,11 @@ PUBLIC_BENCHMARKS = {
     "full_pipeline": ROOT / "data" / "benchmark_full_pipeline.json",
 }
 
-FINAL_BASELINE = {
-    "success_rate": 0.35,
-    "avg_gpu_mb": 4096.0,
-    "avg_ram_mb": 8192.0,
-    "avg_generation_seconds": 20.0,
-    "avg_execution_seconds": 2.0,
-}
 
 
-def _build_questions(path: Path | None = None) -> list[dict]:
-    try:
-        if path is None:
-            return build_benchmark_inputs()
-        return build_benchmark_inputs(path)
-    except TypeError:
-        previous = os.environ.get("BENCHMARK_PATH")
-        if path is None:
-            os.environ.pop("BENCHMARK_PATH", None)
-        else:
-            os.environ["BENCHMARK_PATH"] = str(path)
-        try:
-            return build_benchmark_inputs()
-        finally:
-            if previous is None:
-                os.environ.pop("BENCHMARK_PATH", None)
-            else:
-                os.environ["BENCHMARK_PATH"] = previous
+
+def _build_questions(path: Path) -> list[dict]:
+    return build_benchmark_inputs(path)
 
 
 def _with_absolute_dataset_paths(question: dict) -> dict:
@@ -92,7 +70,7 @@ def load_questions_from_path(path: Path) -> list[dict]:
     return [_with_absolute_dataset_paths(q) for q in _build_questions(path)]
 
 
-questions = [_with_absolute_dataset_paths(q) for q in _build_questions()]
+questions = [_with_absolute_dataset_paths(q) for q in _build_questions(PUBLIC_BENCHMARKS["select"])]
 final_questions = load_questions_from_path(FINAL_BENCHMARK_PATH)
 
 

@@ -1,0 +1,510 @@
+{
+  "questions": [
+    {
+      "id": "OPT01",
+      "question": "Get product names and prices for products over 100.",
+      "datasets": {
+        "nw_products": {
+          "file_name": "data/nw_products.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = nw_products.filter(pl.col(\"unit_price\") > 100).select(\"product_name\", \"unit_price\")"
+    },
+    {
+      "id": "OPT02",
+      "question": "Count films per rating.",
+      "datasets": {
+        "sk_films": {
+          "file_name": "data/sk_films.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sk_films.group_by(\"rating\").agg(pl.len().alias(\"count\"))"
+    },
+    {
+      "id": "OPT03",
+      "question": "Find customers with negative account balance.",
+      "datasets": {
+        "tpch_customer": {
+          "file_name": "data/tpch_customer.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = tpch_customer.filter(pl.col(\"c_acctbal\") < 0).select(\"c_name\", \"c_acctbal\")"
+    },
+    {
+      "id": "OPT04",
+      "question": "Select name, milliseconds for tracks under 1 minute.",
+      "datasets": {
+        "ck_tracks": {
+          "file_name": "data/ck_tracks.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = ck_tracks.filter(pl.col(\"milliseconds\") < 60000).select(\"name\", \"milliseconds\")"
+    },
+    {
+      "id": "OPT05",
+      "question": "Get names and populations of Asian countries.",
+      "datasets": {
+        "sp_world_country": {
+          "file_name": "data/sp_world_country.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sp_world_country.filter(pl.col(\"continent\") == \"Asia\").select(\"name\", \"population\")"
+    },
+    {
+      "id": "OPT06",
+      "question": "Get product name and category name for products under 20 EUR.",
+      "datasets": {
+        "nw_products": {
+          "file_name": "data/nw_products.parquet",
+          "format": "parquet"
+        },
+        "nw_categories": {
+          "file_name": "data/nw_categories.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = nw_products.join(nw_categories, on=\"category_id\").filter(pl.col(\"unit_price\") < 20).select(\"product_name\", \"category_name\")"
+    },
+    {
+      "id": "OPT07",
+      "question": "Count orders per market segment.",
+      "datasets": {
+        "tpch_orders": {
+          "file_name": "data/tpch_orders.parquet",
+          "format": "parquet"
+        },
+        "tpch_customer": {
+          "file_name": "data/tpch_customer.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = tpch_orders.join(tpch_customer, left_on=\"o_custkey\", right_on=\"c_custkey\").group_by(\"c_mktsegment\").agg(pl.len().alias(\"order_count\"))"
+    },
+    {
+      "id": "OPT08",
+      "question": "Total payments per customer, only for amounts above 5.",
+      "datasets": {
+        "sk_payments": {
+          "file_name": "data/sk_payments.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sk_payments.filter(pl.col(\"amount\") > 5).group_by(\"customer_id\").agg(pl.col(\"amount\").sum().round(2).alias(\"total\"))"
+    },
+    {
+      "id": "OPT09",
+      "question": "Total revenue per product. Revenue = unit_price * quantity * (1 - discount).",
+      "datasets": {
+        "nw_order_details": {
+          "file_name": "data/nw_order_details.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = nw_order_details.with_columns((pl.col(\"unit_price\") * pl.col(\"quantity\") * (1 - pl.col(\"discount\"))).alias(\"revenue\")).group_by(\"product_id\").agg(pl.col(\"revenue\").sum().round(2).alias(\"total_revenue\")).sort(\"total_revenue\", descending=True)"
+    },
+    {
+      "id": "OPT10",
+      "question": "Average track duration in seconds per genre name. Only genres with more than 50 tracks.",
+      "datasets": {
+        "ck_tracks": {
+          "file_name": "data/ck_tracks.parquet",
+          "format": "parquet"
+        },
+        "ck_genres": {
+          "file_name": "data/ck_genres.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = ck_tracks.join(ck_genres, on=\"genre_id\").group_by(pl.col(\"name_right\").alias(\"genre\")).agg((pl.col(\"milliseconds\").mean() / 1000).round(1).alias(\"avg_seconds\"), pl.len().alias(\"n_tracks\")).filter(pl.col(\"n_tracks\") > 50)"
+    },
+    {
+      "id": "OPT11",
+      "question": "Total revenue per category for orders in 2024. Chain: details → products → categories + orders (filter 2024).",
+      "datasets": {
+        "nw_order_details": {
+          "file_name": "data/nw_order_details.parquet",
+          "format": "parquet"
+        },
+        "nw_products": {
+          "file_name": "data/nw_products.parquet",
+          "format": "parquet"
+        },
+        "nw_categories": {
+          "file_name": "data/nw_categories.parquet",
+          "format": "parquet"
+        },
+        "nw_orders": {
+          "file_name": "data/nw_orders.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = nw_order_details.join(nw_products, on=\"product_id\").join(nw_categories, on=\"category_id\").with_columns((pl.col(\"unit_price\") * pl.col(\"quantity\") * (1 - pl.col(\"discount\"))).alias(\"revenue\")).join(nw_orders, on=\"order_id\").filter(pl.col(\"order_date\").str.starts_with(\"2024\")).group_by(\"category_name\").agg(pl.col(\"revenue\").sum().round(2).alias(\"total_revenue\")).sort(\"total_revenue\", descending=True)"
+    },
+    {
+      "id": "OPT12",
+      "question": "Total revenue per nation for fulfilled orders. Revenue = l_extendedprice * (1-l_discount). Filter o_orderstatus = 'F'.",
+      "datasets": {
+        "tpch_lineitem": {
+          "file_name": "data/tpch_lineitem.parquet",
+          "format": "parquet"
+        },
+        "tpch_orders": {
+          "file_name": "data/tpch_orders.parquet",
+          "format": "parquet"
+        },
+        "tpch_customer": {
+          "file_name": "data/tpch_customer.parquet",
+          "format": "parquet"
+        },
+        "tpch_nation": {
+          "file_name": "data/tpch_nation.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = tpch_lineitem.with_columns((pl.col(\"l_extendedprice\") * (1 - pl.col(\"l_discount\"))).alias(\"revenue\")).join(tpch_orders, left_on=\"l_orderkey\", right_on=\"o_orderkey\").filter(pl.col(\"o_orderstatus\") == \"F\").join(tpch_customer, left_on=\"o_custkey\", right_on=\"c_custkey\").join(tpch_nation, left_on=\"c_nationkey\", right_on=\"n_nationkey\").group_by(\"n_name\").agg(pl.col(\"revenue\").sum().round(2).alias(\"total_rev\")).sort(\"total_rev\", descending=True)"
+    },
+    {
+      "id": "OPT13",
+      "question": "Count rentals per film category for rentals in 2024. Chain: rentals (filter 2024) → inventory → films → film_category → categories.",
+      "datasets": {
+        "sk_rentals": {
+          "file_name": "data/sk_rentals.parquet",
+          "format": "parquet"
+        },
+        "sk_inventory": {
+          "file_name": "data/sk_inventory.parquet",
+          "format": "parquet"
+        },
+        "sk_films": {
+          "file_name": "data/sk_films.parquet",
+          "format": "parquet"
+        },
+        "sk_categories": {
+          "file_name": "data/sk_categories.parquet",
+          "format": "parquet"
+        },
+        "sk_film_category": {
+          "file_name": "data/sk_film_category.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sk_rentals.filter(pl.col(\"rental_date\").str.starts_with(\"2024\")).join(sk_inventory, on=\"inventory_id\").join(sk_films, on=\"film_id\").join(sk_film_category, on=\"film_id\").join(sk_categories, on=\"category_id\").group_by(\"name\").agg(pl.len().alias(\"rental_count\")).sort(\"rental_count\", descending=True)"
+    },
+    {
+      "id": "OPT14",
+      "question": "Total sales per artist. Chain: invoice_lines → tracks → albums → artists. Revenue = unit_price * quantity.",
+      "datasets": {
+        "ck_invoice_lines": {
+          "file_name": "data/ck_invoice_lines.parquet",
+          "format": "parquet"
+        },
+        "ck_tracks": {
+          "file_name": "data/ck_tracks.parquet",
+          "format": "parquet"
+        },
+        "ck_albums": {
+          "file_name": "data/ck_albums.parquet",
+          "format": "parquet"
+        },
+        "ck_artists": {
+          "file_name": "data/ck_artists.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = ck_invoice_lines.with_columns((pl.col(\"unit_price\") * pl.col(\"quantity\")).alias(\"rev\")).join(ck_tracks.select(\"track_id\", \"album_id\"), on=\"track_id\").join(ck_albums, on=\"album_id\").join(ck_artists, on=\"artist_id\").group_by(\"name\").agg(pl.col(\"rev\").sum().round(2).alias(\"total_sales\")).sort(\"total_sales\", descending=True)"
+    },
+    {
+      "id": "OPT15",
+      "question": "Average freight per country, only for shipped orders (shipped_date not null), top 5.",
+      "datasets": {
+        "nw_orders": {
+          "file_name": "data/nw_orders.parquet",
+          "format": "parquet"
+        },
+        "nw_customers": {
+          "file_name": "data/nw_customers.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = nw_orders.filter(pl.col(\"shipped_date\").is_not_null()).join(nw_customers, on=\"customer_id\").group_by(\"country\").agg(pl.col(\"freight\").mean().round(2).alias(\"avg_freight\")).sort(\"avg_freight\", descending=True).head(5)"
+    },
+    {
+      "id": "OPT16",
+      "question": "For SMALL parts (p_size < 10), compute total revenue per container type. Optimize by filtering parts first.",
+      "datasets": {
+        "tpch_lineitem": {
+          "file_name": "data/tpch_lineitem.parquet",
+          "format": "parquet"
+        },
+        "tpch_part": {
+          "file_name": "data/tpch_part.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = tpch_lineitem.join(tpch_part, left_on=\"l_partkey\", right_on=\"p_partkey\").filter(pl.col(\"p_size\") < 10).with_columns((pl.col(\"l_extendedprice\") * (1 - pl.col(\"l_discount\"))).alias(\"revenue\")).group_by(\"p_container\").agg(pl.col(\"revenue\").sum().round(2).alias(\"total_rev\")).sort(\"total_rev\", descending=True)"
+    },
+    {
+      "id": "OPT17",
+      "question": "Average rental duration in days for R-rated films. Filter films by rating first, then join.",
+      "datasets": {
+        "sk_rentals": {
+          "file_name": "data/sk_rentals.parquet",
+          "format": "parquet"
+        },
+        "sk_inventory": {
+          "file_name": "data/sk_inventory.parquet",
+          "format": "parquet"
+        },
+        "sk_films": {
+          "file_name": "data/sk_films.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sk_rentals.filter(pl.col(\"return_date\").is_not_null()).join(sk_inventory, on=\"inventory_id\").join(sk_films, on=\"film_id\").filter(pl.col(\"rating\") == \"R\").with_columns((pl.col(\"return_date\").str.to_datetime() - pl.col(\"rental_date\").str.to_datetime()).dt.total_days().alias(\"duration_days\")).select(pl.col(\"duration_days\").mean().round(1).alias(\"avg_rental_days\"))"
+    },
+    {
+      "id": "OPT18",
+      "question": "Total revenue per supplier country for 2024 orders. Optimize: filter orders by date first, prune columns at each join.",
+      "datasets": {
+        "nw_order_details": {
+          "file_name": "data/nw_order_details.parquet",
+          "format": "parquet"
+        },
+        "nw_orders": {
+          "file_name": "data/nw_orders.parquet",
+          "format": "parquet"
+        },
+        "nw_products": {
+          "file_name": "data/nw_products.parquet",
+          "format": "parquet"
+        },
+        "nw_suppliers": {
+          "file_name": "data/nw_suppliers.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = nw_order_details.with_columns((pl.col(\"unit_price\") * pl.col(\"quantity\") * (1 - pl.col(\"discount\"))).alias(\"revenue\")).join(nw_orders, on=\"order_id\").filter(pl.col(\"order_date\").str.starts_with(\"2024\")).join(nw_products, on=\"product_id\").join(nw_suppliers, on=\"supplier_id\").group_by(\"country\").agg(pl.col(\"revenue\").sum().round(2).alias(\"total_rev\")).sort(\"total_rev\", descending=True)"
+    },
+    {
+      "id": "OPT19",
+      "question": "For URGENT orders (priority = '1-URGENT'), find the top 5 customers by total revenue. Optimize with early filter + projection.",
+      "datasets": {
+        "tpch_lineitem": {
+          "file_name": "data/tpch_lineitem.parquet",
+          "format": "parquet"
+        },
+        "tpch_orders": {
+          "file_name": "data/tpch_orders.parquet",
+          "format": "parquet"
+        },
+        "tpch_customer": {
+          "file_name": "data/tpch_customer.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = tpch_lineitem.with_columns((pl.col(\"l_extendedprice\") * (1 - pl.col(\"l_discount\"))).alias(\"rev\")).join(tpch_orders, left_on=\"l_orderkey\", right_on=\"o_orderkey\").filter(pl.col(\"o_orderpriority\") == \"1-URGENT\").join(tpch_customer, left_on=\"o_custkey\", right_on=\"c_custkey\").group_by(\"c_name\").agg(pl.col(\"rev\").sum().round(2).alias(\"total_rev\")).sort(\"total_rev\", descending=True).head(5)"
+    },
+    {
+      "id": "OPT20",
+      "question": "Total spending per country for invoices in 2023. Optimize: filter invoices first, prune columns.",
+      "datasets": {
+        "ck_invoice_lines": {
+          "file_name": "data/ck_invoice_lines.parquet",
+          "format": "parquet"
+        },
+        "ck_invoices": {
+          "file_name": "data/ck_invoices.parquet",
+          "format": "parquet"
+        },
+        "ck_customers": {
+          "file_name": "data/ck_customers.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = ck_invoice_lines.with_columns((pl.col(\"unit_price\") * pl.col(\"quantity\")).alias(\"rev\")).join(ck_invoices, on=\"invoice_id\").filter(pl.col(\"invoice_date\").str.starts_with(\"2023\")).join(ck_customers, on=\"customer_id\").group_by(\"country\").agg(pl.col(\"rev\").sum().round(2).alias(\"total\")).sort(\"total\", descending=True)"
+    },
+    {
+      "id": "OPT21",
+      "question": "For each customer, compute running total of payments and rank by total paid (window).",
+      "datasets": {
+        "sk_payments": {
+          "file_name": "data/sk_payments.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sk_payments.sort(\"payment_date\").with_columns(pl.col(\"amount\").cum_sum().over(\"customer_id\").alias(\"running_total\"), pl.col(\"amount\").sum().over(\"customer_id\").alias(\"customer_total\")).with_columns(pl.col(\"customer_total\").rank(method=\"dense\", descending=True).alias(\"customer_rank\"))"
+    },
+    {
+      "id": "OPT22",
+      "question": "For each ship mode, compute average revenue per line and total lines. Revenue = extendedprice * (1 - discount).",
+      "datasets": {
+        "tpch_lineitem": {
+          "file_name": "data/tpch_lineitem.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = tpch_lineitem.with_columns((pl.col(\"l_extendedprice\") * (1 - pl.col(\"l_discount\"))).alias(\"rev\")).group_by(\"l_shipmode\").agg(pl.col(\"rev\").mean().round(2).alias(\"avg_rev\"), pl.len().alias(\"n_lines\")).sort(\"avg_rev\", descending=True)"
+    },
+    {
+      "id": "OPT23",
+      "question": "Monthly order count and total revenue for 2023. Optimize with early date filter.",
+      "datasets": {
+        "nw_order_details": {
+          "file_name": "data/nw_order_details.parquet",
+          "format": "parquet"
+        },
+        "nw_orders": {
+          "file_name": "data/nw_orders.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = nw_order_details.with_columns((pl.col(\"unit_price\") * pl.col(\"quantity\") * (1 - pl.col(\"discount\"))).alias(\"revenue\")).join(nw_orders, on=\"order_id\").filter(pl.col(\"order_date\").str.starts_with(\"2023\")).with_columns(pl.col(\"order_date\").str.slice(0, 7).alias(\"month\")).group_by(\"month\").agg(pl.col(\"order_id\").n_unique().alias(\"n_orders\"), pl.col(\"revenue\").sum().round(2).alias(\"total_rev\")).sort(\"month\")"
+    },
+    {
+      "id": "OPT24",
+      "question": "Average mpg per maker country for 6-cylinder cars.",
+      "datasets": {
+        "sp_car_data": {
+          "file_name": "data/sp_car_data.parquet",
+          "format": "parquet"
+        },
+        "sp_car_maker": {
+          "file_name": "data/sp_car_maker.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sp_car_data.filter(pl.col(\"cylinders\") == 6).join(sp_car_maker, left_on=\"maker_id\", right_on=\"id\").group_by(\"country\").agg(pl.col(\"mpg\").mean().round(1).alias(\"avg_mpg\"))"
+    },
+    {
+      "id": "OPT25",
+      "question": "Count routes per active airline. Filter active airlines before join.",
+      "datasets": {
+        "sp_route": {
+          "file_name": "data/sp_route.parquet",
+          "format": "parquet"
+        },
+        "sp_airline": {
+          "file_name": "data/sp_airline.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sp_route.join(sp_airline, on=\"airline_id\").filter(pl.col(\"active\")).group_by(\"name\").agg(pl.len().alias(\"route_count\")).sort(\"route_count\", descending=True)"
+    },
+    {
+      "id": "OPT26",
+      "question": "For each customer, total payments, total rentals, and avg payment per rental. Only active customers.",
+      "datasets": {
+        "sk_payments": {
+          "file_name": "data/sk_payments.parquet",
+          "format": "parquet"
+        },
+        "sk_customers": {
+          "file_name": "data/sk_customers.parquet",
+          "format": "parquet"
+        },
+        "sk_rentals": {
+          "file_name": "data/sk_rentals.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sk_payments.group_by(\"customer_id\").agg(pl.col(\"amount\").sum().round(2).alias(\"total_paid\"), pl.len().alias(\"n_payments\")).join(sk_rentals.group_by(\"customer_id\").agg(pl.len().alias(\"n_rentals\")), on=\"customer_id\").join(sk_customers.filter(pl.col(\"active\")), on=\"customer_id\").with_columns((pl.col(\"total_paid\") / pl.col(\"n_rentals\")).round(2).alias(\"avg_per_rental\")).select(\"first_name\", \"last_name\", \"total_paid\", \"n_rentals\", \"avg_per_rental\").sort(\"total_paid\", descending=True)"
+    },
+    {
+      "id": "OPT27",
+      "question": "Find the cheapest supplier per part, with supplier nation name.",
+      "datasets": {
+        "tpch_partsupp": {
+          "file_name": "data/tpch_partsupp.parquet",
+          "format": "parquet"
+        },
+        "tpch_supplier": {
+          "file_name": "data/tpch_supplier.parquet",
+          "format": "parquet"
+        },
+        "tpch_nation": {
+          "file_name": "data/tpch_nation.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = tpch_partsupp.sort(\"ps_supplycost\").group_by(\"ps_partkey\").agg(pl.col(\"ps_suppkey\").first().alias(\"best_supp\"), pl.col(\"ps_supplycost\").first().alias(\"min_cost\")).join(tpch_supplier, left_on=\"best_supp\", right_on=\"s_suppkey\").join(tpch_nation, left_on=\"s_nationkey\", right_on=\"n_nationkey\").select(\"ps_partkey\", \"best_supp\", \"min_cost\", \"n_name\")"
+    },
+    {
+      "id": "OPT28",
+      "question": "Revenue per employee for 2023 orders. Show first_name, last_name, total_revenue. Top 5.",
+      "datasets": {
+        "nw_order_details": {
+          "file_name": "data/nw_order_details.parquet",
+          "format": "parquet"
+        },
+        "nw_orders": {
+          "file_name": "data/nw_orders.parquet",
+          "format": "parquet"
+        },
+        "nw_employees": {
+          "file_name": "data/nw_employees.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = nw_order_details.with_columns((pl.col(\"unit_price\") * pl.col(\"quantity\") * (1 - pl.col(\"discount\"))).alias(\"revenue\")).join(nw_orders, on=\"order_id\").filter(pl.col(\"order_date\").str.starts_with(\"2023\")).group_by(\"employee_id\").agg(pl.col(\"revenue\").sum().round(2).alias(\"total_rev\")).sort(\"total_rev\", descending=True).head(5).join(nw_employees, on=\"employee_id\").select(\"first_name\", \"last_name\", \"total_rev\")"
+    },
+    {
+      "id": "OPT29",
+      "question": "Revenue per region for Manufacturer#3 parts. 5-table pipeline optimized.",
+      "datasets": {
+        "tpch_lineitem": {
+          "file_name": "data/tpch_lineitem.parquet",
+          "format": "parquet"
+        },
+        "tpch_part": {
+          "file_name": "data/tpch_part.parquet",
+          "format": "parquet"
+        },
+        "tpch_supplier": {
+          "file_name": "data/tpch_supplier.parquet",
+          "format": "parquet"
+        },
+        "tpch_nation": {
+          "file_name": "data/tpch_nation.parquet",
+          "format": "parquet"
+        },
+        "tpch_region": {
+          "file_name": "data/tpch_region.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = tpch_lineitem.with_columns((pl.col(\"l_extendedprice\") * (1 - pl.col(\"l_discount\"))).alias(\"rev\")).join(tpch_part, left_on=\"l_partkey\", right_on=\"p_partkey\").filter(pl.col(\"p_mfgr\") == \"Manufacturer#3\").join(tpch_supplier, left_on=\"l_suppkey\", right_on=\"s_suppkey\").join(tpch_nation, left_on=\"s_nationkey\", right_on=\"n_nationkey\").join(tpch_region, left_on=\"n_regionkey\", right_on=\"r_regionkey\").group_by(\"r_name\").agg(pl.col(\"rev\").sum().round(2).alias(\"total_rev\")).sort(\"total_rev\", descending=True)"
+    },
+    {
+      "id": "OPT30",
+      "question": "For R-rated films, compute avg rental duration in days and total payment amount per customer. Only returned rentals. Optimize.",
+      "datasets": {
+        "sk_rentals": {
+          "file_name": "data/sk_rentals.parquet",
+          "format": "parquet"
+        },
+        "sk_inventory": {
+          "file_name": "data/sk_inventory.parquet",
+          "format": "parquet"
+        },
+        "sk_films": {
+          "file_name": "data/sk_films.parquet",
+          "format": "parquet"
+        },
+        "sk_payments": {
+          "file_name": "data/sk_payments.parquet",
+          "format": "parquet"
+        },
+        "sk_customers": {
+          "file_name": "data/sk_customers.parquet",
+          "format": "parquet"
+        }
+      },
+      "gold_code": "result = sk_rentals.filter(pl.col(\"return_date\").is_not_null()).join(sk_inventory, on=\"inventory_id\").join(sk_films.filter(pl.col(\"rating\") == \"R\"), on=\"film_id\").with_columns((pl.col(\"return_date\").str.to_datetime() - pl.col(\"rental_date\").str.to_datetime()).dt.total_days().alias(\"days\")).group_by(\"customer_id\").agg(pl.col(\"days\").mean().round(1).alias(\"avg_days\"), pl.len().alias(\"n_rentals\")).join(sk_payments.group_by(\"customer_id\").agg(pl.col(\"amount\").sum().round(2).alias(\"total_paid\")), on=\"customer_id\").join(sk_customers, on=\"customer_id\").select(\"first_name\", \"last_name\", \"avg_days\", \"n_rentals\", \"total_paid\").sort(\"total_paid\", descending=True).head(10)"
+    }
+  ]
+}
