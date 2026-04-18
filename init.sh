@@ -6,7 +6,6 @@ TEAM_USER="teamuser"
 APP_USER="hackapr"
 APP_GROUP="hackapr"
 APP_DIR="/var/lib/hack_apr"
-SERVICE_NAME="hack-apr"
 PORT="9000"
 
 LOG_DIR="/var/log/hack_apr"
@@ -51,7 +50,7 @@ chown -R "${APP_USER}:${APP_GROUP}" "/home/${APP_USER}"
 chmod 755 "/home/${APP_USER}"
 
 apt-get update
-apt-get install -y curl ca-certificates
+apt-get install -y curl ca-certificates procps
 
 if ! command -v uv >/dev/null 2>&1; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -84,57 +83,37 @@ chmod 700 "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 700 {} \;
 find "$APP_DIR" -type f -exec chmod 600 {} \;
 
-if [ -f "$APP_DIR/pyproject.toml" ]; then
-  su -s /bin/bash "$APP_USER" -c "
-    export HOME=/home/${APP_USER}
-    export PATH=/usr/local/bin:/home/${APP_USER}/.local/bin:\$PATH
-    export TMPDIR=${WORKSPACE_TMP}
-    export HF_HOME=${WORKSPACE_HF}
-    export UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
-    export UV_LINK_MODE=copy
-    export VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
-    export UV_PYTHON_INSTALL_DIR=${WORKSPACE_UV_PYTHON}
-    export UV_MANAGED_PYTHON=1
-    cd ${APP_DIR}
-    uv python install 3.12
-    uv sync --python 3.12
-  "
-fi
+su -s /bin/bash "$APP_USER" -c "
+  export HOME=/home/${APP_USER}
+  export PATH=/usr/local/bin:/home/${APP_USER}/.local/bin:\$PATH
+  export TMPDIR=${WORKSPACE_TMP}
+  export HF_HOME=${WORKSPACE_HF}
+  export UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
+  export UV_LINK_MODE=copy
+  export VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
+  export UV_PYTHON_INSTALL_DIR=${WORKSPACE_UV_PYTHON}
+  export UV_MANAGED_PYTHON=1
+  cd ${APP_DIR}
+  uv python install 3.12
+  uv sync --python 3.12
+"
 
-cat >/etc/systemd/system/${SERVICE_NAME}.service <<EOF
-[Unit]
-Description=hack_apr server
-After=network.target
+pkill -f "uvicorn main:app --host 0.0.0.0 --port ${PORT}" 2>/dev/null || true
 
-[Service]
-User=${APP_USER}
-Group=${APP_GROUP}
-WorkingDirectory=${APP_DIR}
-Environment=PYTHONUNBUFFERED=1
-Environment=PATH=/usr/local/bin:/home/${APP_USER}/.local/bin:/usr/bin:/bin
-Environment=TMPDIR=${WORKSPACE_TMP}
-Environment=HF_HOME=${WORKSPACE_HF}
-Environment=UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
-Environment=UV_LINK_MODE=copy
-Environment=VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
-Environment=UV_PYTHON_INSTALL_DIR=${WORKSPACE_UV_PYTHON}
-Environment=UV_MANAGED_PYTHON=1
-Environment=SUBMIT_FINAL_SECRET=change-me
-ExecStart=/usr/local/bin/uv run --python 3.12 uvicorn main:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive 3600
-Restart=always
-RestartSec=3
-StandardOutput=append:${LOG_DIR}/server.log
-StandardError=append:${LOG_DIR}/server.log
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable "${SERVICE_NAME}"
-systemctl restart "${SERVICE_NAME}"
+su -s /bin/bash "$APP_USER" -c "
+  export HOME=/home/${APP_USER}
+  export PATH=/usr/local/bin:/home/${APP_USER}/.local/bin:\$PATH
+  export TMPDIR=${WORKSPACE_TMP}
+  export HF_HOME=${WORKSPACE_HF}
+  export UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
+  export UV_LINK_MODE=copy
+  export VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
+  export UV_PYTHON_INSTALL_DIR=${WORKSPACE_UV_PYTHON}
+  export UV_MANAGED_PYTHON=1
+  export SUBMIT_FINAL_SECRET=change-me
+  cd ${APP_DIR}
+  nohup /usr/local/bin/uv run --python 3.12 uvicorn main:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive 3600 >> ${LOG_DIR}/server.log 2>&1 &
+"
 
 mkdir -p "/home/${TEAM_USER}/share"
 chown -R "${TEAM_USER}:${TEAM_USER}" "/home/${TEAM_USER}"
@@ -153,11 +132,11 @@ Runtime:
   ${WORKSPACE_VENVS}
   ${WORKSPACE_UV_PYTHON}
 
-Python:
-  uv-managed Python 3.12
-
-Example:
+Useful commands:
   curl http://127.0.0.1:${PORT}/
+  tail -f ${LOG_DIR}/server.log
+  ps aux | grep uvicorn
+  pkill -f "uvicorn main:app --host 0.0.0.0 --port ${PORT}"
 EOF
 
 chown "${TEAM_USER}:${TEAM_USER}" "/home/${TEAM_USER}/README.txt"
