@@ -33,7 +33,7 @@ CACHE_VENVS_ROOT = VENVS_ROOT / "cache"
 
 LOCK_PATH = TMP_ROOT / "benchmark.lock"
 FINAL_BENCHMARK_PATH = ROOT / "data" / "benchmark_final.json"
-SUBMIT_FINAL_SECRET = "this is a password"
+SUBMIT_FINAL_SECRET = "thisisapassword"
 
 PUBLIC_BENCHMARKS = {
     "select": ROOT / "data" / "benchmark_select.json",
