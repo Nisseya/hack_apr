@@ -28,7 +28,7 @@ PROTECTED_PACKAGES = {
     "accelerate",
 }
 
-BENCHMARK_PATH = ROOT / "data" / "benchmark_select.json"
+BENCHMARK_PATH = ROOT / "data" / "benchmark_final.json"
 
 
 def get_free_port():
