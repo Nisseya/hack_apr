@@ -190,7 +190,8 @@ def run(repo_url):
         executed = []
 
         for i, q in enumerate(questions, 1):
-            print(f"[5] Question {i}/{len(questions)}: {q['id']}")
+            print(f"\n[5] Question {i}/{len(questions)}: {q['id']}")
+            print(f"[Q] {q['question']}")
 
             gen = get_code(
                 pid=process.pid,
@@ -200,6 +201,8 @@ def run(repo_url):
             )
 
             print(f"[5] Generated in {gen.duration_seconds:.2f}s")
+            print("\n[CODE]")
+            print(gen.response_text)
 
             generated.append({
                 "gen_time": gen.duration_seconds,
@@ -209,6 +212,12 @@ def run(repo_url):
 
             gen_exec = execute_code(gen.response_text, q["datasets"], ROOT)
             gold_exec = execute_code(q["gold_code"], q["datasets"], ROOT)
+
+            print("\n[STDOUT]")
+            print(gen_exec.stdout.strip() or "(empty)")
+
+            print("\n[STDERR]")
+            print(gen_exec.stderr.strip() or "(empty)")
 
             gen_payload = parse_stdout(gen_exec.stdout)
             gold_payload = parse_stdout(gold_exec.stdout)
@@ -221,14 +230,13 @@ def run(repo_url):
                     and gen_payload["columns"] == gold_payload["columns"]
                 )
 
-            print(f"[5] success={gen_exec.success} exact={exact}")
+            print(f"\n[RESULT] success={gen_exec.success} exact={exact}")
 
             executed.append({
                 "id": q["id"],
                 "success": gen_exec.success,
                 "exact": exact,
             })
-
         score = compute_score(generated, executed)
 
         correct = sum(1 for e in executed if e["success"] and e["exact"])
