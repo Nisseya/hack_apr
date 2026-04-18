@@ -1,1 +1,0 @@
-docker build -f Dockerfile.executor -t polars-executor:latest .

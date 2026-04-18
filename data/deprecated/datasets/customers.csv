@@ -1,9 +1,0 @@
-customer_id,country,city,signup_date,segment,age,is_premium,churned,lifetime_value
-1,FR,Paris,2024-01-05,A,28,True,False,1200.0
-2,FR,Lyon,2024-02-10,B,34,False,False,450.0
-3,US,New York,2024-01-20,A,41,True,True,1800.0
-4,US,Boston,2024-03-03,C,25,False,False,200.0
-5,DE,Berlin,2024-01-15,B,37,True,False,990.0
-6,DE,Munich,2024-04-01,A,30,False,True,650.0
-7,FR,Marseille,2024-02-25,C,29,True,False,1500.0
-8,ES,Madrid,2024-05-12,B,45,False,False,300.0

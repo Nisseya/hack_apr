@@ -1,7 +1,0 @@
-product_id,category,sub_category,brand,launch_date,is_active,base_price,weight_grams
-1001,Electronics,Phone,Acme,2024-01-01,True,95.0,180.0
-1002,Electronics,Audio,Acme,2024-03-01,True,30.0,220.0
-1003,Home,Kitchen,Zen,2023-11-01,True,85.0,1500.0
-1004,Home,Decor,Luma,2024-05-01,False,70.0,800.0
-1005,Sports,Outdoor,Peak,2024-02-15,True,150.0,1200.0
-1006,Sports,Fitness,Peak,2024-06-01,True,60.0,950.0

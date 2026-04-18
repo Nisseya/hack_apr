@@ -126,28 +126,24 @@ def install_deps(repo_dir: Path) -> Path:
     pyproject = repo_dir / "pyproject.toml"
 
     if pyproject.exists():
-        content = pyproject.read_text(encoding="utf-8", errors="replace").lower()
-        blocked = [n for n in PROTECTED_PACKAGES if f'"{n}' in content or f"'{n}" in content]
-        if blocked:
-            raise RuntimeError(f"Protected packages in pyproject.toml: {', '.join(blocked)}")
         raise RuntimeError("pyproject.toml is not supported, use requirements.txt")
 
     if not requirements.exists():
         return BASE_VENV
 
-    # filter protected packages
+    # filter out protected packages (they stay as installed in the base env)
     kept = []
-    blocked = []
+    skipped = []
     for raw_line in requirements.read_text(encoding="utf-8", errors="replace").splitlines():
         name = req_name(raw_line)
         if name and name in PROTECTED_PACKAGES:
-            blocked.append(name)
+            skipped.append(name)
             continue
         if raw_line.strip():
             kept.append(raw_line)
 
-    if blocked:
-        raise RuntimeError(f"Protected packages in requirements.txt: {', '.join(set(blocked))}")
+    if skipped:
+        log("preparing_env", f"Skipping protected packages: {', '.join(sorted(set(skipped)))}")
 
     if kept:
         filtered = repo_dir / ".filtered_requirements.txt"
