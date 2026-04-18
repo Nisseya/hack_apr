@@ -1,8 +1,6 @@
 import asyncio
 import fcntl
-import hashlib
 import json
-import math
 import shutil
 import socket
 import subprocess
@@ -28,11 +26,21 @@ UV_CACHE_DIR = WORKSPACE_ROOT / "uv_cache"
 
 BASE_VENV = WORKSPACE_ROOT / "hack_apr_env"
 BASE_PYTHON = BASE_VENV / "bin" / "python"
-CACHE_VENVS_ROOT = WORKSPACE_ROOT / "venvs" / "cache"
 
 LOCK_PATH = TMP_ROOT / "benchmark.lock"
 FINAL_BENCHMARK_PATH = ROOT / "data" / "benchmark_final.json"
 SUBMIT_FINAL_SECRET = "thisisapassword"
+
+PROTECTED_PACKAGES = {
+    "torch",
+    "polars",
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "requests",
+    "transformers",
+    "accelerate",
+}
 
 PUBLIC_BENCHMARKS = {
     "select": ROOT / "data" / "benchmark_select.json",
@@ -127,7 +135,6 @@ def ensure_workspace_dirs() -> None:
     TMP_ROOT.mkdir(parents=True, exist_ok=True)
     HF_HOME.mkdir(parents=True, exist_ok=True)
     UV_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_VENVS_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 def ensure_base_env() -> None:
@@ -144,7 +151,6 @@ def uv_env() -> dict[str, str]:
     env["TMPDIR"] = str(TMP_ROOT)
     env["HF_HOME"] = str(HF_HOME)
     env["UV_CACHE_DIR"] = str(UV_CACHE_DIR)
-    env["UV_LINK_MODE"] = "copy"
     env["HF_HUB_DISABLE_XET"] = "1"
     return env
 
@@ -207,55 +213,68 @@ def clone_repo(repo_url: str) -> Path:
     )
 
 
-def dependency_fingerprint(repo_dir: Path) -> str:
+def normalize_package_name(name: str) -> str:
+    return name.strip().lower().replace("_", "-").replace(".", "-")
+
+
+def requirement_name(line: str) -> str | None:
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return None
+    if line.startswith(("-", "git+", "http://", "https://")):
+        return None
+
+    for sep in ("==", ">=", "<=", "~=", "!=", ">", "<", "[", ";"):
+        if sep in line:
+            line = line.split(sep, 1)[0]
+            break
+
+    line = line.strip()
+    return normalize_package_name(line) if line else None
+
+
+def assert_requirements_allowed(repo_dir: Path) -> None:
     requirements = repo_dir / "requirements.txt"
-    pyproject = repo_dir / "pyproject.toml"
-    lock = repo_dir / "uv.lock"
+    if not requirements.exists():
+        return
 
-    hasher = hashlib.sha256()
-    hasher.update(subprocess.check_output([str(BASE_PYTHON), "--version"], env=uv_env()))
-    hasher.update(
-        subprocess.check_output(
-            ["uv", "pip", "freeze", "--python", str(BASE_PYTHON)],
-            env=uv_env(),
-        )
-    )
+    blocked = []
+    for line in requirements.read_text(encoding="utf-8", errors="replace").splitlines():
+        name = requirement_name(line)
+        if name and name in PROTECTED_PACKAGES:
+            blocked.append(name)
 
-    if requirements.exists():
-        hasher.update(b"requirements.txt\n")
-        hasher.update(requirements.read_bytes())
-
-    if pyproject.exists():
-        hasher.update(b"pyproject.toml\n")
-        hasher.update(pyproject.read_bytes())
-
-    if lock.exists():
-        hasher.update(b"uv.lock\n")
-        hasher.update(lock.read_bytes())
-
-    return hasher.hexdigest()
-
-
-def ensure_cached_env(repo_dir: Path) -> Path:
-    ensure_base_env()
-
-    env_dir = CACHE_VENVS_ROOT / dependency_fingerprint(repo_dir)
-    python_path = env_dir / "bin" / "python"
-
-    if python_path.exists():
-        return env_dir
-
-    result = subprocess.run(
-        [str(BASE_PYTHON), "-m", "venv", str(env_dir)],
-        capture_output=True,
-        text=True,
-        env=uv_env(),
-    )
-    if result.returncode != 0:
+    if blocked:
+        blocked = sorted(set(blocked))
         raise HTTPException(
-            status_code=500,
-            detail=result.stderr.strip() or result.stdout.strip(),
+            status_code=400,
+            detail=f"Protected packages cannot be declared in requirements.txt: {', '.join(blocked)}",
         )
+
+
+def assert_pyproject_allowed(repo_dir: Path) -> None:
+    pyproject = repo_dir / "pyproject.toml"
+    if not pyproject.exists():
+        return
+
+    content = pyproject.read_text(encoding="utf-8", errors="replace").lower()
+    blocked = [name for name in sorted(PROTECTED_PACKAGES) if f'"{name}' in content or f"'{name}" in content]
+
+    if blocked:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Protected packages cannot be declared in pyproject.toml: {', '.join(blocked)}",
+        )
+
+
+def assert_repo_dependencies_allowed(repo_dir: Path) -> None:
+    assert_requirements_allowed(repo_dir)
+    assert_pyproject_allowed(repo_dir)
+
+
+def install_repo_dependencies(repo_dir: Path) -> Path:
+    ensure_base_env()
+    assert_repo_dependencies_allowed(repo_dir)
 
     requirements = repo_dir / "requirements.txt"
     pyproject = repo_dir / "pyproject.toml"
@@ -268,7 +287,7 @@ def ensure_cached_env(repo_dir: Path) -> Path:
                 "pip",
                 "install",
                 "--python",
-                str(python_path),
+                str(BASE_PYTHON),
                 "-r",
                 str(requirements),
             ],
@@ -277,9 +296,16 @@ def ensure_cached_env(repo_dir: Path) -> Path:
             text=True,
             env=uv_env(),
         )
-    elif pyproject.exists():
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=result.stderr.strip() or result.stdout.strip(),
+            )
+        return BASE_VENV
+
+    if pyproject.exists():
         env = uv_env()
-        env["UV_PROJECT_ENVIRONMENT"] = str(env_dir)
+        env["UV_PROJECT_ENVIRONMENT"] = str(BASE_VENV)
         cmd = ["uv", "sync"]
         if lock.exists():
             cmd.append("--frozen")
@@ -290,21 +316,13 @@ def ensure_cached_env(repo_dir: Path) -> Path:
             text=True,
             env=env,
         )
-    else:
-        return env_dir
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=500,
+                detail=result.stderr.strip() or result.stdout.strip(),
+            )
 
-    if result.returncode == 0:
-        return env_dir
-
-    shutil.rmtree(env_dir, ignore_errors=True)
-    raise HTTPException(
-        status_code=500,
-        detail=result.stderr.strip() or result.stdout.strip(),
-    )
-
-
-def install_repo_dependencies(repo_dir: Path) -> Path:
-    return ensure_cached_env(repo_dir)
+    return BASE_VENV
 
 
 def start_submission_server(repo_dir: Path, env_dir: Path, port: int, quiet: bool = False):
@@ -682,7 +700,7 @@ async def submit_final(payload: SubmitFinalRequest):
         except HTTPException as exc:
             yield sse_event(
                 "error",
-                {"message": exc.detail if exc.status_code == 403 else "Submission failed"},
+                {"message": exc.detail if exc.status_code == 403 else exc.detail},
             )
         except Exception:
             yield sse_event("error", {"message": "Submission failed"})
@@ -729,6 +747,7 @@ async def run_repo_stream(payload: RunRepoRequest):
         process = None
         log_path = None
         base_url = None
+        env_dir = None
 
         try:
             yield sse_event(
@@ -804,7 +823,7 @@ async def run_repo_stream(payload: RunRepoRequest):
                     "success": True,
                     "benchmark": benchmark_name,
                     "repo_dir": str(repo_dir) if repo_dir else None,
-                    "env_dir": str(env_dir),
+                    "env_dir": str(env_dir) if env_dir else None,
                     "generator_pid": process.pid if process else None,
                     "url": base_url,
                     "generator_logs": read_text_file(log_path),
