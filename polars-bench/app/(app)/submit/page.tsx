@@ -105,8 +105,7 @@ export default function SubmitPage() {
   }
 
   const vmMissing = !team.vmUrl;
-  const canSubmit =
-    !!repoUrl && !submitting && (kind === "global" || !vmMissing);
+  const canSubmit = !!repoUrl && !submitting && !vmMissing;
 
   return (
     <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
@@ -150,29 +149,29 @@ export default function SubmitPage() {
         </CardContent>
       </Card>
 
+      {vmMissing && (
+        <div className="mt-6 border border-destructive/40 bg-destructive/5 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+          <div className="text-sm">
+            <div className="font-mono text-xs uppercase tracking-widest text-destructive mb-1">
+              vm_url_missing
+            </div>
+            <p className="text-muted-foreground">
+              Your team has not configured its VM URL.{" "}
+              <Link
+                href={`/teams/${team.slug}`}
+                className="text-primary underline"
+              >
+                Set it on the team page
+              </Link>{" "}
+              before submitting — both test and global runs target your VM.
+            </p>
+          </div>
+        </div>
+      )}
+
       {kind === "test" && (
         <>
-          {vmMissing && (
-            <div className="mt-6 border border-destructive/40 bg-destructive/5 p-4 flex items-start gap-3">
-              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
-              <div className="text-sm">
-                <div className="font-mono text-xs uppercase tracking-widest text-destructive mb-1">
-                  vm_url_missing
-                </div>
-                <p className="text-muted-foreground">
-                  Your team has not configured its VM URL.{" "}
-                  <Link
-                    href={`/teams/${team.slug}`}
-                    className="text-primary underline"
-                  >
-                    Set it on the team page
-                  </Link>{" "}
-                  before running a test submission.
-                </p>
-              </div>
-            </div>
-          )}
-
           <Card className="mt-6">
             <CardHeader>
               <CardTitle>Benchmark</CardTitle>
@@ -211,6 +210,16 @@ export default function SubmitPage() {
             </div>
           )}
         </>
+      )}
+
+      {kind === "global" && team.vmUrl && (
+        <div className="mt-6 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <Server className="h-3 w-3" />
+          target:{" "}
+          <span className="text-primary normal-case">
+            {team.vmUrl}/submit_final
+          </span>
+        </div>
       )}
 
       <Card className="mt-6">

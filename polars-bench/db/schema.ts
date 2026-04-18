@@ -10,8 +10,14 @@ import {
   primaryKey,
   unique,
 } from "drizzle-orm/pg-core";
-import { createId } from "@/lib/ids";
+
 import { relations } from "drizzle-orm";
+
+import { randomBytes } from "crypto";
+
+function createId(): string {
+  return randomBytes(12).toString("base64url");
+}
 
 // ---- better-auth core tables (names/columns must match better-auth defaults) ----
 

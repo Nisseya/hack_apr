@@ -106,22 +106,20 @@ export async function POST(req: Request) {
       { status: 400 },
     );
 
-  // For test: require VM URL configured on the team
-  if (kind === "test") {
-    const [t] = await db
-      .select()
-      .from(team)
-      .where(eq(team.id, mem.teamId))
-      .limit(1);
-    if (!t?.vmUrl?.trim()) {
-      return NextResponse.json(
-        {
-          error:
-            "Your team has not configured its VM URL. Set it on the team page first.",
-        },
-        { status: 400 },
-      );
-    }
+  // Both kinds target the team's VM now
+  const [t] = await db
+    .select()
+    .from(team)
+    .where(eq(team.id, mem.teamId))
+    .limit(1);
+  if (!t?.vmUrl?.trim()) {
+    return NextResponse.json(
+      {
+        error:
+          "Your team has not configured its VM URL. Set it on the team page first.",
+      },
+      { status: 400 },
+    );
   }
 
   // Prevent concurrent running submissions per team

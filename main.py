@@ -33,7 +33,7 @@ CACHE_VENVS_ROOT = VENVS_ROOT / "cache"
 
 LOCK_PATH = TMP_ROOT / "benchmark.lock"
 FINAL_BENCHMARK_PATH = ROOT / "data" / "benchmark_final.json"
-SUBMIT_FINAL_SECRET = os.environ.get("SUBMIT_FINAL_SECRET", "change-me")
+SUBMIT_FINAL_SECRET = "this is a password"
 
 PUBLIC_BENCHMARKS = {
     "select": ROOT / "data" / "benchmark_select.json",
@@ -573,43 +573,34 @@ def compute_submit_final_score(
     generated_answers: list[GeneratedAnswer],
     executed_answers: list[ExecutedAnswer],
 ) -> float:
-    total = len(executed_answers)
-    success_count = sum(1 for answer in executed_answers if answer.success and answer.exact_match)
-    success_rate = success_count / total if total else 0.0
-
-    avg_gpu_mb = sum(answer.peak_gpu_mb for answer in generated_answers) / total if total else 0.0
-    avg_ram_mb = sum(answer.peak_ram_mb for answer in generated_answers) / total if total else 0.0
-    avg_generation_seconds = (
-        sum(answer.generation_duration_seconds for answer in generated_answers) / total if total else 0.0
-    )
-    avg_execution_seconds = (
-        sum(answer.execution_duration_seconds for answer in executed_answers) / total if total else 0.0
+    correct_count = sum(
+        1 for answer in executed_answers if answer.success and answer.exact_match
     )
 
-    success_gain = clamp_gain(success_rate / max(FINAL_BASELINE["success_rate"], 1e-6))
-    gpu_gain = clamp_gain(FINAL_BASELINE["avg_gpu_mb"] / max(avg_gpu_mb, 1e-6))
-    ram_gain = clamp_gain(FINAL_BASELINE["avg_ram_mb"] / max(avg_ram_mb, 1e-6))
-    generation_gain = clamp_gain(
-        FINAL_BASELINE["avg_generation_seconds"] / max(avg_generation_seconds, 1e-6)
-    )
-    execution_gain = clamp_gain(
-        FINAL_BASELINE["avg_execution_seconds"] / max(avg_execution_seconds, 1e-6)
-    )
-
-    if success_count == 0:
+    if correct_count == 0:
         return 0.0
 
-    score = geometric_mean(
-        [
-            success_gain,
-            gpu_gain,
-            ram_gain,
-            generation_gain,
-            execution_gain,
-        ]
+    total_generation_seconds = sum(
+        answer.generation_duration_seconds for answer in generated_answers
+    )
+    avg_gpu_mb = (
+        sum(answer.peak_gpu_mb for answer in generated_answers) / len(generated_answers)
+        if generated_answers
+        else 0.0
+    )
+    avg_ram_mb = (
+        sum(answer.peak_ram_mb for answer in generated_answers) / len(generated_answers)
+        if generated_answers
+        else 0.0
     )
 
-    return round(score, 6)
+    denominator = (
+        max(total_generation_seconds, 1e-6)
+        * max(avg_gpu_mb, 1e-6) ** 0.1
+        * max(avg_ram_mb, 1e-6) ** 0.01
+    )
+
+    return round(correct_count / denominator, 6)
 
 
 def sse_event(event: str, data: dict) -> str:

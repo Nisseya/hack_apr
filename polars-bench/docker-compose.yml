@@ -32,7 +32,6 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       BACKEND_TEST_URL: ${BACKEND_TEST_URL:-http://host.docker.internal:8000}
-      BACKEND_GLOBAL_URL: ${BACKEND_GLOBAL_URL:-http://host.docker.internal:8000}
       BACKEND_GLOBAL_SECRET: ${BACKEND_GLOBAL_SECRET:-}
     extra_hosts:
       # Allow reaching the local FastAPI backend running on the host

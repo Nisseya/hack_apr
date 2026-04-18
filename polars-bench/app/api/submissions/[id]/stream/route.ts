@@ -15,10 +15,6 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_TEST_URL =
   process.env.BACKEND_TEST_URL || "http://host.docker.internal:8000";
-const GLOBAL_URL =
-  process.env.BACKEND_GLOBAL_URL ||
-  process.env.BACKEND_TEST_URL ||
-  "http://host.docker.internal:8000";
 const GLOBAL_SECRET = process.env.BACKEND_GLOBAL_SECRET || "";
 
 function normalizeBackendUrl(url: string): string {
@@ -146,17 +142,16 @@ export async function POST(
     );
   }
 
-  if (sub.kind === "test") {
-    const vm = teamRow.vmUrl?.trim();
-    if (!vm) {
-      return new Response(
-        JSON.stringify({
-          error:
-            "Your team has not configured its VM URL. Ask the owner to set it on the team page before running test submissions.",
-        }),
-        { status: 400 },
-      );
-    }
+  // Both test and global submissions target the team's VM now.
+  const vm = teamRow.vmUrl?.trim();
+  if (!vm) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Your team has not configured its VM URL. Ask the owner to set it on the team page before submitting.",
+      }),
+      { status: 400 },
+    );
   }
 
   if (sub.kind === "global" && !GLOBAL_SECRET) {
@@ -222,7 +217,7 @@ export async function POST(
         if (sub.kind === "test") {
           await runTestBenchmark({ sub, teamRow, send });
         } else {
-          await runGlobalBenchmark({ sub, send });
+          await runGlobalBenchmark({ sub, teamRow, send });
         }
       } catch (e: any) {
         const msg = e?.message ?? String(e);
@@ -419,17 +414,19 @@ async function runTestBenchmark({
 
 async function runGlobalBenchmark({
   sub,
+  teamRow,
   send,
 }: {
   sub: typeof submission.$inferSelect;
+  teamRow: typeof team.$inferSelect;
   send: (event: string, data: unknown) => void;
 }) {
-  const backend = normalizeBackendUrl(GLOBAL_URL);
+  const backend = normalizeBackendUrl(teamRow.vmUrl || DEFAULT_TEST_URL);
   const target = `${backend}/submit_final`;
 
   send("status", {
     step: "connecting",
-    message: "Submitting to the official final benchmark",
+    message: `Submitting to the official final benchmark at ${backend}`,
   });
 
   let response: Response;
