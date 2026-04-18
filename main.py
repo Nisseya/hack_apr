@@ -3,7 +3,6 @@ import fcntl
 import hashlib
 import json
 import math
-import os
 import shutil
 import socket
 import subprocess
@@ -26,10 +25,10 @@ WORKSPACE_ROOT = Path("/workspace")
 TMP_ROOT = WORKSPACE_ROOT / "tmp"
 HF_HOME = WORKSPACE_ROOT / "hf"
 UV_CACHE_DIR = WORKSPACE_ROOT / "uv_cache"
-VENVS_ROOT = WORKSPACE_ROOT / "venvs"
-BASE_VENV = VENVS_ROOT / "base"
+
+BASE_VENV = WORKSPACE_ROOT / "hack_apr_env"
 BASE_PYTHON = BASE_VENV / "bin" / "python"
-CACHE_VENVS_ROOT = VENVS_ROOT / "cache"
+CACHE_VENVS_ROOT = WORKSPACE_ROOT / "venvs" / "cache"
 
 LOCK_PATH = TMP_ROOT / "benchmark.lock"
 FINAL_BENCHMARK_PATH = ROOT / "data" / "benchmark_final.json"
@@ -45,8 +44,6 @@ PUBLIC_BENCHMARKS = {
 }
 
 
-
-
 def _build_questions(path: Path) -> list[dict]:
     return build_benchmark_inputs(path)
 
@@ -56,11 +53,11 @@ def _with_absolute_dataset_paths(question: dict) -> dict:
     datasets = {}
 
     for name, dataset in question["datasets"].items():
-        dataset = dict(dataset)
-        file_path = Path(dataset["file_name"])
+        item = dict(dataset)
+        file_path = Path(item["file_name"])
         if not file_path.is_absolute():
-            dataset["file_name"] = str((ROOT / file_path).resolve())
-        datasets[name] = dataset
+            item["file_name"] = str((ROOT / file_path).resolve())
+        datasets[name] = item
 
     question["datasets"] = datasets
     return question
@@ -70,7 +67,7 @@ def load_questions_from_path(path: Path) -> list[dict]:
     return [_with_absolute_dataset_paths(q) for q in _build_questions(path)]
 
 
-questions = [_with_absolute_dataset_paths(q) for q in _build_questions(PUBLIC_BENCHMARKS["select"])]
+questions = load_questions_from_path(PUBLIC_BENCHMARKS["select"])
 final_questions = load_questions_from_path(FINAL_BENCHMARK_PATH)
 
 
@@ -118,10 +115,6 @@ class RunRepoResponse(BaseModel):
     generator_logs: str
 
 
-class SubmitFinalResponse(BaseModel):
-    score: float
-
-
 class ErrorResponse(BaseModel):
     detail: str
 
@@ -134,16 +127,25 @@ def ensure_workspace_dirs() -> None:
     TMP_ROOT.mkdir(parents=True, exist_ok=True)
     HF_HOME.mkdir(parents=True, exist_ok=True)
     UV_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    VENVS_ROOT.mkdir(parents=True, exist_ok=True)
     CACHE_VENVS_ROOT.mkdir(parents=True, exist_ok=True)
 
 
+def ensure_base_env() -> None:
+    ensure_workspace_dirs()
+    if not BASE_PYTHON.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=f"Base environment not found: {BASE_PYTHON}",
+        )
+
+
 def uv_env() -> dict[str, str]:
-    env = os.environ.copy()
+    env = dict(**subprocess.os.environ)
     env["TMPDIR"] = str(TMP_ROOT)
     env["HF_HOME"] = str(HF_HOME)
     env["UV_CACHE_DIR"] = str(UV_CACHE_DIR)
     env["UV_LINK_MODE"] = "copy"
+    env["HF_HUB_DISABLE_XET"] = "1"
     return env
 
 
@@ -195,51 +197,14 @@ def clone_repo(repo_url: str) -> Path:
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
-        shutil.rmtree(repo_dir, ignore_errors=True)
-        raise HTTPException(
-            status_code=500,
-            detail=result.stderr.strip() or result.stdout.strip(),
-        )
-    return repo_dir
+    if result.returncode == 0:
+        return repo_dir
 
-
-def ensure_base_env() -> None:
-    ensure_workspace_dirs()
-
-    if BASE_PYTHON.exists():
-        return
-
-    result = subprocess.run(
-        ["uv", "venv", str(BASE_VENV)],
-        capture_output=True,
-        text=True,
-        env=uv_env(),
+    shutil.rmtree(repo_dir, ignore_errors=True)
+    raise HTTPException(
+        status_code=500,
+        detail=result.stderr.strip() or result.stdout.strip() or "git clone failed",
     )
-    if result.returncode != 0:
-        raise HTTPException(status_code=500, detail=result.stderr.strip() or result.stdout.strip())
-
-    result = subprocess.run(
-        [
-            "uv",
-            "pip",
-            "install",
-            "--python",
-            str(BASE_PYTHON),
-            "fastapi",
-            "uvicorn",
-            "polars",
-            "pandas",
-            "numpy",
-            "requests",
-            "pydantic",
-        ],
-        capture_output=True,
-        text=True,
-        env=uv_env(),
-    )
-    if result.returncode != 0:
-        raise HTTPException(status_code=500, detail=result.stderr.strip() or result.stdout.strip())
 
 
 def dependency_fingerprint(repo_dir: Path) -> str:
@@ -287,7 +252,10 @@ def ensure_cached_env(repo_dir: Path) -> Path:
         env=uv_env(),
     )
     if result.returncode != 0:
-        raise HTTPException(status_code=500, detail=result.stderr.strip() or result.stdout.strip())
+        raise HTTPException(
+            status_code=500,
+            detail=result.stderr.strip() or result.stdout.strip(),
+        )
 
     requirements = repo_dir / "requirements.txt"
     pyproject = repo_dir / "pyproject.toml"
@@ -309,17 +277,12 @@ def ensure_cached_env(repo_dir: Path) -> Path:
             text=True,
             env=uv_env(),
         )
-        if result.returncode != 0:
-            shutil.rmtree(env_dir, ignore_errors=True)
-            raise HTTPException(status_code=500, detail=result.stderr.strip() or result.stdout.strip())
     elif pyproject.exists():
         env = uv_env()
         env["UV_PROJECT_ENVIRONMENT"] = str(env_dir)
-
         cmd = ["uv", "sync"]
         if lock.exists():
             cmd.append("--frozen")
-
         result = subprocess.run(
             cmd,
             cwd=repo_dir,
@@ -327,11 +290,17 @@ def ensure_cached_env(repo_dir: Path) -> Path:
             text=True,
             env=env,
         )
-        if result.returncode != 0:
-            shutil.rmtree(env_dir, ignore_errors=True)
-            raise HTTPException(status_code=500, detail=result.stderr.strip() or result.stdout.strip())
+    else:
+        return env_dir
 
-    return env_dir
+    if result.returncode == 0:
+        return env_dir
+
+    shutil.rmtree(env_dir, ignore_errors=True)
+    raise HTTPException(
+        status_code=500,
+        detail=result.stderr.strip() or result.stdout.strip(),
+    )
 
 
 def install_repo_dependencies(repo_dir: Path) -> Path:
@@ -341,6 +310,7 @@ def install_repo_dependencies(repo_dir: Path) -> Path:
 def start_submission_server(repo_dir: Path, env_dir: Path, port: int, quiet: bool = False):
     log_path = None if quiet else repo_dir / "server.log"
     python_path = env_dir / "bin" / "python"
+
     cmd = [
         str(python_path),
         "-m",
@@ -354,9 +324,6 @@ def start_submission_server(repo_dir: Path, env_dir: Path, port: int, quiet: boo
         "1200",
     ]
 
-    env = uv_env()
-    env["HF_HUB_DISABLE_XET"] = "1"
-
     log_target = subprocess.DEVNULL if quiet else open(log_path, "w")
 
     process = subprocess.Popen(
@@ -364,7 +331,7 @@ def start_submission_server(repo_dir: Path, env_dir: Path, port: int, quiet: boo
         cwd=repo_dir,
         stdout=log_target,
         stderr=subprocess.STDOUT,
-        env=env,
+        env=uv_env(),
         start_new_session=True,
     )
 
@@ -374,7 +341,12 @@ def start_submission_server(repo_dir: Path, env_dir: Path, port: int, quiet: boo
     return process, f"http://127.0.0.1:{port}", log_path
 
 
-def wait_until_up(process: subprocess.Popen, url: str, log_path: Path | None, timeout: float = 3600.0) -> None:
+def wait_until_up(
+    process: subprocess.Popen,
+    url: str,
+    log_path: Path | None,
+    timeout: float = 3600.0,
+) -> None:
     deadline = time.time() + timeout
 
     while time.time() < deadline:
@@ -412,7 +384,11 @@ def parse_execution_stdout(stdout: str) -> dict | None:
         return None
 
 
-def compare_execution_results(question_id: str, generated_execution, gold_execution) -> ExecutedAnswer:
+def compare_execution_results(
+    question_id: str,
+    generated_execution,
+    gold_execution,
+) -> ExecutedAnswer:
     if not generated_execution.success:
         return ExecutedAnswer(
             id=question_id,
@@ -468,7 +444,11 @@ def compare_execution_results(question_id: str, generated_execution, gold_execut
     )
 
 
-def run_single_question(process: subprocess.Popen, base_url: str, question: dict) -> tuple[GeneratedAnswer, ExecutedAnswer]:
+def run_single_question(
+    process: subprocess.Popen,
+    base_url: str,
+    question: dict,
+) -> tuple[GeneratedAnswer, ExecutedAnswer]:
     generation = get_code(
         pid=process.pid,
         base_url=base_url,
@@ -487,12 +467,20 @@ def run_single_question(process: subprocess.Popen, base_url: str, question: dict
 
     generated_execution = execute_code(generated_answer.code, question["datasets"], ROOT)
     gold_execution = execute_code(question["gold_code"], question["datasets"], ROOT)
-    executed_answer = compare_execution_results(question["id"], generated_execution, gold_execution)
+    executed_answer = compare_execution_results(
+        question["id"],
+        generated_execution,
+        gold_execution,
+    )
 
     return generated_answer, executed_answer
 
 
-def generate_answers_from_repo(pid: int, base_url: str, benchmark_questions: list[dict]) -> list[GeneratedAnswer]:
+def generate_answers_from_repo(
+    pid: int,
+    base_url: str,
+    benchmark_questions: list[dict],
+) -> list[GeneratedAnswer]:
     generated_answers = []
 
     for question in benchmark_questions:
@@ -539,14 +527,6 @@ def execute_answers(
     return executed_answers, total_execution_duration_seconds
 
 
-def geometric_mean(values: list[float]) -> float:
-    return math.exp(sum(math.log(value) for value in values) / len(values))
-
-
-def clamp_gain(value: float, minimum: float = 1e-6, maximum: float = 2.0) -> float:
-    return max(min(value, maximum), minimum)
-
-
 def compute_submit_final_score(
     generated_answers: list[GeneratedAnswer],
     executed_answers: list[ExecutedAnswer],
@@ -554,23 +534,14 @@ def compute_submit_final_score(
     correct_count = sum(
         1 for answer in executed_answers if answer.success and answer.exact_match
     )
-
     if correct_count == 0:
         return 0.0
 
     total_generation_seconds = sum(
         answer.generation_duration_seconds for answer in generated_answers
     )
-    avg_gpu_mb = (
-        sum(answer.peak_gpu_mb for answer in generated_answers) / len(generated_answers)
-        if generated_answers
-        else 0.0
-    )
-    avg_ram_mb = (
-        sum(answer.peak_ram_mb for answer in generated_answers) / len(generated_answers)
-        if generated_answers
-        else 0.0
-    )
+    avg_gpu_mb = sum(answer.peak_gpu_mb for answer in generated_answers) / len(generated_answers)
+    avg_ram_mb = sum(answer.peak_ram_mb for answer in generated_answers) / len(generated_answers)
 
     denominator = (
         max(total_generation_seconds, 1e-6)
@@ -582,7 +553,6 @@ def compute_submit_final_score(
 
 
 def sse_event(event: str, data: dict) -> str:
-    print(f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n")
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
@@ -597,7 +567,6 @@ def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
         raise HTTPException(status_code=409, detail="A benchmark is already running")
 
     repo_dir = None
-    env_dir = None
     process = None
     log_path = None
 
@@ -622,7 +591,6 @@ def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
             executed_answers=executed_answers,
             generator_logs=logs,
         )
-
     except HTTPException:
         raise
     except Exception as e:
@@ -652,51 +620,35 @@ def run_repo(payload: RunRepoRequest) -> RunRepoResponse:
 async def submit_final(payload: SubmitFinalRequest):
     if payload.secret != SUBMIT_FINAL_SECRET:
         raise HTTPException(status_code=403, detail="Forbidden")
- 
+
     lock_file = acquire_benchmark_lock()
     if lock_file is None:
         raise HTTPException(status_code=409, detail="A benchmark is already running")
- 
+
     total = len(final_questions)
- 
+
     async def event_generator():
         repo_dir = None
-        env_dir = None
         process = None
- 
+
         try:
-            yield sse_event(
-                "status",
-                {"step": "cloning", "message": "Cloning repository"},
-            )
+            yield sse_event("status", {"step": "cloning", "message": "Cloning repository"})
             repo_dir = clone_repo(payload.repo_url)
- 
-            yield sse_event(
-                "status",
-                {"step": "preparing_env", "message": "Preparing environment"},
-            )
+
+            yield sse_event("status", {"step": "preparing_env", "message": "Preparing environment"})
             env_dir = install_repo_dependencies(repo_dir)
- 
+
             port = get_free_port()
-            yield sse_event(
-                "status",
-                {"step": "starting_server", "message": "Starting server"},
-            )
-            process, base_url, _ = start_submission_server(
-                repo_dir, env_dir, port, quiet=True
-            )
+            yield sse_event("status", {"step": "starting_server", "message": "Starting server"})
+            process, base_url, _ = start_submission_server(repo_dir, env_dir, port, quiet=True)
             wait_until_up(process, f"{base_url}/", None)
- 
-            yield sse_event(
-                "status",
-                {"step": "server_ready", "message": "Submission server is ready"},
-            )
- 
+
+            yield sse_event("status", {"step": "server_ready", "message": "Submission server is ready"})
+
             generated_answers: list[GeneratedAnswer] = []
             executed_answers: list[ExecutedAnswer] = []
- 
+
             for index, question in enumerate(final_questions, start=1):
-                # Notify progress WITHOUT revealing question id/text
                 yield sse_event(
                     "progress",
                     {
@@ -705,15 +657,11 @@ async def submit_final(payload: SubmitFinalRequest):
                         "total": total,
                     },
                 )
- 
-                generated_answer, executed_answer = run_single_question(
-                    process, base_url, question
-                )
+
+                generated_answer, executed_answer = run_single_question(process, base_url, question)
                 generated_answers.append(generated_answer)
                 executed_answers.append(executed_answer)
- 
-                # Notify completion of this question - ONLY aggregated signal,
-                # no question id, no generated code, no stdout/stderr.
+
                 yield sse_event(
                     "progress",
                     {
@@ -721,32 +669,22 @@ async def submit_final(payload: SubmitFinalRequest):
                         "index": index,
                         "total": total,
                         "correct_so_far": sum(
-                            1
-                            for a in executed_answers
-                            if a.success and a.exact_match
+                            1 for answer in executed_answers if answer.success and answer.exact_match
                         ),
                     },
                 )
- 
+
                 await asyncio.sleep(0)
- 
+
             score = compute_submit_final_score(generated_answers, executed_answers)
- 
-            yield sse_event(
-                "done",
-                {"success": True, "score": score},
-            )
- 
+            yield sse_event("done", {"success": True, "score": score})
         except HTTPException as exc:
             yield sse_event(
                 "error",
                 {"message": exc.detail if exc.status_code == 403 else "Submission failed"},
             )
         except Exception:
-            yield sse_event(
-                "error",
-                {"message": "Submission failed"},
-            )
+            yield sse_event("error", {"message": "Submission failed"})
         finally:
             if process is not None:
                 process.terminate()
@@ -754,12 +692,12 @@ async def submit_final(payload: SubmitFinalRequest):
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     process.kill()
- 
+
             if repo_dir is not None:
                 shutil.rmtree(repo_dir, ignore_errors=True)
- 
+
             lock_file.close()
- 
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
@@ -769,7 +707,7 @@ async def submit_final(payload: SubmitFinalRequest):
             "X-Accel-Buffering": "no",
         },
     )
- 
+
 
 @app.post(
     "/run-repo-stream",
@@ -787,7 +725,6 @@ async def run_repo_stream(payload: RunRepoRequest):
 
     async def event_generator():
         repo_dir = None
-        env_dir = None
         process = None
         log_path = None
         base_url = None
@@ -823,8 +760,8 @@ async def run_repo_stream(payload: RunRepoRequest):
                 },
             )
             process, base_url, log_path = start_submission_server(repo_dir, env_dir, port)
-
             wait_until_up(process, f"{base_url}/", log_path)
+
             yield sse_event(
                 "status",
                 {
@@ -860,28 +797,25 @@ async def run_repo_stream(payload: RunRepoRequest):
 
                 await asyncio.sleep(0)
 
-            logs = read_text_file(log_path)
             yield sse_event(
                 "done",
                 {
                     "success": True,
                     "benchmark": benchmark_name,
                     "repo_dir": str(repo_dir) if repo_dir else None,
-                    "env_dir": str(env_dir) if env_dir else None,
+                    "env_dir": str(env_dir),
                     "generator_pid": process.pid if process else None,
                     "url": base_url,
-                    "generator_logs": logs,
+                    "generator_logs": read_text_file(log_path),
                 },
             )
-
         except Exception as e:
-            logs = read_text_file(log_path)
             yield sse_event(
                 "error",
                 {
                     "benchmark": benchmark_name,
                     "message": str(e),
-                    "generator_logs": logs,
+                    "generator_logs": read_text_file(log_path),
                 },
             )
         finally:
