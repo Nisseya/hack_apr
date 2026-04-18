@@ -68,19 +68,19 @@ chmod 700 "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 700 {} \;
 find "$APP_DIR" -type f -exec chmod 600 {} \;
 
-if [ -f "$APP_DIR/pyproject.toml" ]; then
-  su -s /bin/bash "$APP_USER" -c "
-    export HOME=/home/${APP_USER}
-    export PATH=/usr/local/bin:/home/${APP_USER}/.local/bin:\$PATH
-    export TMPDIR=${WORKSPACE_TMP}
-    export HF_HOME=${WORKSPACE_HF}
-    export UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
-    export UV_LINK_MODE=copy
-    export VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
-    cd ${APP_DIR}
-    uv sync
-  "
-fi
+su -s /bin/bash "$APP_USER" -c "
+  export HOME=/home/${APP_USER}
+  export PATH=/usr/local/bin:/home/${APP_USER}/.local/bin:\$PATH
+  export TMPDIR=${WORKSPACE_TMP}
+  export HF_HOME=${WORKSPACE_HF}
+  export UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
+  export UV_LINK_MODE=copy
+  export VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
+  export UV_MANAGED_PYTHON=1
+  uv python install 3.12
+  cd ${APP_DIR}
+  uv sync --python 3.12
+"
 
 cat >/etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
@@ -98,8 +98,9 @@ Environment=HF_HOME=${WORKSPACE_HF}
 Environment=UV_CACHE_DIR=${WORKSPACE_UV_CACHE}
 Environment=UV_LINK_MODE=copy
 Environment=VIRTUALENV_OVERRIDE_APP_DATA=${WORKSPACE_VENVS}
+Environment=UV_MANAGED_PYTHON=1
 Environment=SUBMIT_FINAL_SECRET=change-me
-ExecStart=/usr/local/bin/uv run uvicorn main:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive 3600
+ExecStart=/usr/local/bin/uv run --python 3.12 uvicorn main:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive 3600
 Restart=always
 RestartSec=3
 StandardOutput=append:${LOG_DIR}/server.log
@@ -130,6 +131,9 @@ Runtime:
   ${WORKSPACE_HF}
   ${WORKSPACE_UV_CACHE}
   ${WORKSPACE_VENVS}
+
+Python:
+  uv-managed Python 3.12
 
 Example:
   curl http://127.0.0.1:${PORT}/
