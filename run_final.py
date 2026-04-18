@@ -28,7 +28,7 @@ PROTECTED_PACKAGES = {
     "accelerate",
 }
 
-BENCHMARK_PATH = ROOT / "data" / "benchmark_final.json"
+BENCHMARK_PATH = ROOT / "data" / "benchmark_select.json"
 
 
 def get_free_port():
@@ -40,10 +40,12 @@ def get_free_port():
 
 
 def clone_repo(url):
+    print(f"[1] Cloning repo: {url}")
     repo_dir = Path(tempfile.mkdtemp(dir=TMP_ROOT))
     r = subprocess.run(["git", "clone", url, str(repo_dir)], capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(r.stderr)
+    print(f"[1] Repo cloned -> {repo_dir}")
     return repo_dir
 
 
@@ -61,17 +63,22 @@ def requirement_name(line):
 def install_deps(repo_dir):
     req = repo_dir / "requirements.txt"
     if not req.exists():
+        print("[2] No requirements.txt")
         return
+
+    print("[2] Installing dependencies")
 
     lines = []
     for l in req.read_text().splitlines():
         name = requirement_name(l)
         if name and name in PROTECTED_PACKAGES:
+            print(f"[2] Skipping protected package: {name}")
             continue
         if l.strip():
             lines.append(l)
 
     if not lines:
+        print("[2] No installable dependencies")
         return
 
     tmp = repo_dir / ".req.txt"
@@ -85,8 +92,11 @@ def install_deps(repo_dir):
     if r.returncode != 0:
         raise RuntimeError(r.stderr)
 
+    print("[2] Dependencies installed")
+
 
 def start_server(repo_dir, port):
+    print(f"[3] Starting server on port {port}")
     log = repo_dir / "server.log"
 
     p = subprocess.Popen(
@@ -107,11 +117,12 @@ def start_server(repo_dir, port):
 
     url = f"http://127.0.0.1:{port}"
 
-    for _ in range(3000):
+    for _ in range(300):
         if p.poll() is not None:
             raise RuntimeError(log.read_text())
         try:
             if requests.get(url, timeout=0.5).ok:
+                print(f"[3] Server ready at {url}")
                 return p, url
         except:
             pass
@@ -121,6 +132,7 @@ def start_server(repo_dir, port):
 
 
 def load_questions():
+    print("[4] Loading questions")
     qs = build_benchmark_inputs(BENCHMARK_PATH)
     out = []
 
@@ -134,6 +146,7 @@ def load_questions():
         q["datasets"] = datasets
         out.append(q)
 
+    print(f"[4] Loaded {len(out)} questions")
     return out
 
 
@@ -149,7 +162,6 @@ def parse_stdout(stdout):
 
 def compute_score(generated, executed):
     correct = sum(1 for e in executed if e["success"] and e["exact"])
-
     if correct == 0:
         return 0.0
 
@@ -177,13 +189,17 @@ def run(repo_url):
         generated = []
         executed = []
 
-        for q in questions:
+        for i, q in enumerate(questions, 1):
+            print(f"[5] Question {i}/{len(questions)}: {q['id']}")
+
             gen = get_code(
                 pid=process.pid,
                 base_url=url,
                 message=q["question"],
                 schema=q["datasets"],
             )
+
+            print(f"[5] Generated in {gen.duration_seconds:.2f}s")
 
             generated.append({
                 "gen_time": gen.duration_seconds,
@@ -205,6 +221,8 @@ def run(repo_url):
                     and gen_payload["columns"] == gold_payload["columns"]
                 )
 
+            print(f"[5] success={gen_exec.success} exact={exact}")
+
             executed.append({
                 "id": q["id"],
                 "success": gen_exec.success,
@@ -213,11 +231,11 @@ def run(repo_url):
 
         score = compute_score(generated, executed)
 
-        print(json.dumps({
-            "score": score,
-            "correct": sum(1 for e in executed if e["success"] and e["exact"]),
-            "total": len(executed),
-        }, indent=2))
+        correct = sum(1 for e in executed if e["success"] and e["exact"])
+
+        print("\n=== FINAL ===")
+        print(f"Score   : {score}")
+        print(f"Correct : {correct}/{len(executed)}")
 
     finally:
         if process:
