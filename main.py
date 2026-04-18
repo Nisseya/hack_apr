@@ -553,6 +553,7 @@ def compute_submit_final_score(
 
 
 def sse_event(event: str, data: dict) -> str:
+    print(f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n")
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
