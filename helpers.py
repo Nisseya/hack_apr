@@ -224,10 +224,12 @@ def execute_code(code: str, datasets: dict[str, dict], project_dir: str | Path) 
         f.write(wrapped_code)
         script_path = f.name
 
+    python_path = Path("/workspace/hack_apr_env/bin/python")
+
     try:
         start = time.perf_counter()
         result = subprocess.run(
-            ["python", script_path],
+            [str(python_path), script_path],
             capture_output=True,
             text=True,
             cwd=project_dir,
