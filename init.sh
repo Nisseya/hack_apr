@@ -5,11 +5,10 @@ TEAM_PASSWORD="${1:-}"
 TEAM_USER="teamuser"
 APP_USER="hackapr"
 APP_GROUP="hackapr"
-APP_DIR="/workspace/hack_apr"
+APP_DIR="/var/lib/hack_apr"
 SERVICE_NAME="hack-apr"
 PORT="9000"
 
-RUNTIME_DIR="/var/lib/hack_apr"
 LOG_DIR="/var/log/hack_apr"
 
 WORKSPACE_TMP="/workspace/tmp"
@@ -57,9 +56,8 @@ if [ -x /root/.local/bin/uv ]; then
   ln -sf /root/.local/bin/uv /usr/local/bin/uv
 fi
 
-mkdir -p "$RUNTIME_DIR" "$LOG_DIR"
-chown -R "$APP_USER:$APP_GROUP" "$RUNTIME_DIR" "$LOG_DIR"
-chmod 755 "$RUNTIME_DIR"
+mkdir -p "$LOG_DIR"
+chown -R "$APP_USER:$APP_GROUP" "$LOG_DIR"
 chmod 750 "$LOG_DIR"
 
 mkdir -p "$WORKSPACE_TMP" "$WORKSPACE_HF" "$WORKSPACE_UV_CACHE" "$WORKSPACE_VENVS"
@@ -124,13 +122,14 @@ chmod 700 "/home/${TEAM_USER}"
 cat >"/home/${TEAM_USER}/README.txt" <<EOF
 Server running on port ${PORT}
 
-Useful paths:
+Repo:
   ${APP_DIR}
+
+Runtime:
   ${WORKSPACE_TMP}
   ${WORKSPACE_HF}
   ${WORKSPACE_UV_CACHE}
   ${WORKSPACE_VENVS}
-  /home/${TEAM_USER}
 
 Example:
   curl http://127.0.0.1:${PORT}/
