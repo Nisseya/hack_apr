@@ -16,16 +16,34 @@ services:
       timeout: 3s
       retries: 20
 
+  # Orchestrator: lightweight FastAPI that forwards submissions to the GPU pool.
+  # It does NOT run benchmarks itself.
   backend:
     build:
       context: ./backend
     restart: unless-stopped
     environment:
       WORKSPACE_ROOT: /workspace
+      RUNPOD_API_KEY: ${RUNPOD_API_KEY:-}
+      RUNPOD_POOL_SIZE: ${RUNPOD_POOL_SIZE:-1}
+      RUNPOD_POOL_IMAGE: ${RUNPOD_POOL_IMAGE:-nisseya/hack-apr-worker:latest}
+      RUNPOD_POOL_GPU: ${RUNPOD_POOL_GPU:-A100-80GB}
+    ports:
+      - "8000:8000"
+
+  # Worker: a GPU pod that actually runs benchmarks. In local dev this can be
+  # the same image; on RunPod it is provisioned as pods via the pool manager.
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      WORKSPACE_ROOT: /workspace
     volumes:
       - workspace:/workspace
     ports:
-      - "8000:8000"
+      - "8001:8000"
 
   web:
     build:
@@ -34,6 +52,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      backend:
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/polars_bench
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
@@ -44,11 +64,6 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       BACKEND_TEST_URL: ${BACKEND_TEST_URL:-http://backend:8000}
       BACKEND_GLOBAL_SECRET: ${BACKEND_GLOBAL_SECRET:-}
-    depends_on:
-      db:
-        condition: service_healthy
-      backend:
-        condition: service_started
     ports:
       - "3000:3000"
     command: sh -c "npm run db:migrate && npm run start"

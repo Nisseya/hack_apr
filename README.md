@@ -6,19 +6,26 @@ Monorepo avec deux parties clairement séparées :
 
 | Partie | Dossier | Stack |
 | --- | --- | --- |
-| **Backend** | [`backend/`](./backend) | FastAPI + Polars |
+| **Backend / orchestrateur** | [`backend/`](./backend) | FastAPI + Polars |
 | **Frontend** | [`frontend/`](./frontend) | Next.js 15 + Postgres + Drizzle |
+| **Worker GPU** | [`worker/`](./worker) | Image Docker GPU (RunPod) |
 
 ```
 hack-apr/
-├── backend/            # API FastAPI (évaluation des soumissions)
-│   ├── main.py         #   endpoints /run-repo-stream, /submit_final
+├── backend/            # Orchestrateur FastAPI (routage vers le pool GPU)
+│   ├── main.py         #   endpoints /run-repo-stream, /submit_final (worker)
+│   ├── pool.py         #   app orchestrateur (forwarding SSE + admin /pool)
+│   ├── gpu_pool.py     #   gestion du pool de pods GPU (scaling manuel)
+│   ├── runpod_client.py#   client API RunPod (créer/lister/terminer des pods)
+│   ├── provision_pool.py # CLI: builder l'image + provisionner le pool
 │   ├── helpers.py      #   exécution de code + métriques RAM/GPU
 │   ├── questions.py    #   chargement des questions
 │   ├── generate_dataset.py
 │   ├── c_run_bench.py  #   CLI: benchmark public
 │   ├── c_run_final.py  #   CLI: benchmark final (scoring)
 │   ├── data/           #   benchmarks JSON (questions + gold code)
+│   └── Dockerfile
+├── worker/             # Image GPU (torch/transformers pré-installés)
 │   └── Dockerfile
 ├── frontend/           # App Next.js (leaderboard, soumissions, SSE)
 │   ├── app/
@@ -85,6 +92,55 @@ npm run dev
 ```
 
 Voir le [README du frontend](./frontend/README.md) pour toutes les fonctionnalités.
+
+---
+
+## Pool de GPUs (RunPod)
+
+Le backend peut fonctionner en **orchestrateur** : au lieu d'exécuter les benchmarks
+lui-même, il maintient un **pool de pods GPU chauds** (modèles déjà en mémoire) et
+achemine chaque soumission vers un pod libre, en relayant le flux SSE.
+
+> Pourquoi des pods chauds plutôt que du serverless ? Le serverless re-télécharge
+> les modèles à chaque cold start (coûteux et lent). Un pool de pods dédiés garde
+> les modèles en mémoire et le cache de dépendances sur un volume persistant.
+
+### 1. Builder & pousser l'image worker
+
+```bash
+# Depuis la racine du repo
+RUNPOD_API_KEY=... python backend/provision_pool.py --push --size 2
+```
+
+### 2. Lancer l'orchestrateur
+
+```bash
+cd backend
+RUNPOD_API_KEY=... RUNPOD_POOL_SIZE=2 uv run uvicorn pool:app --port 8000
+```
+
+### 3. Scaling manuel
+
+```bash
+# Inspecter le pool
+curl http://localhost:8000/pool/health
+
+# Monter à 3 workers
+curl -X POST http://localhost:8000/pool/scale -H 'Content-Type: application/json' -d '{"size": 3}'
+
+# Descendre à 1 worker (les pods excédentaires sont terminés)
+curl -X POST http://localhost:8000/pool/scale -H 'Content-Type: application/json' -d '{"size": 1}'
+```
+
+### Variables d'environnement
+
+| Var | Rôle |
+| --- | --- |
+| `RUNPOD_API_KEY` | Clé API RunPod (gestion des pods) |
+| `RUNPOD_POOL_SIZE` | Nombre de pods chauds à maintenir |
+| `RUNPOD_POOL_IMAGE` | Image worker (défaut `nisseya/hack-apr-worker:latest`) |
+| `RUNPOD_POOL_GPU` | Type de GPU (défaut `A100-80GB`) |
+| `RUNPOD_POOL_VOLUME_SIZE_GB` | Taille du volume persistant (cache modèles/deps) |
 
 ---
 
